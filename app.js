@@ -24,6 +24,7 @@ const tabs = document.querySelectorAll(".tab");
 const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
 const fullscreenButton = document.querySelector("#fullscreen-button");
+const APP_TIME_ZONE = "America/Sao_Paulo";
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -171,6 +172,7 @@ function renderOrders() {
 
 function formatDispatchedTime(order) {
   return new Date(Number(order.dispatchedAt)).toLocaleTimeString("pt-BR", {
+    timeZone: APP_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   });

@@ -18,6 +18,7 @@ const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
 const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 60000;
+const APP_TIME_ZONE = "America/Sao_Paulo";
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
@@ -303,11 +304,25 @@ function readJsonFile(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
 }
 
+function formatLocalDateTime(value = Date.now()) {
+  return new Date(value).toLocaleString("pt-BR", {
+    timeZone: APP_TIME_ZONE,
+  });
+}
+
+function formatLocalTime(value = Date.now()) {
+  return new Date(value).toLocaleTimeString("pt-BR", {
+    timeZone: APP_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function recordEvent(request, body, result) {
   const events = readEvents();
 
   events.unshift({
-    receivedAt: new Date().toLocaleString("pt-BR"),
+    receivedAt: formatLocalDateTime(),
     method: request.method,
     path: request.url,
     result,
@@ -322,7 +337,7 @@ function recordSystemEvent(body, result) {
   const events = readEvents();
 
   events.unshift({
-    receivedAt: new Date().toLocaleString("pt-BR"),
+    receivedAt: formatLocalDateTime(),
     method: "SYSTEM",
     path: "/sync-open-orders",
     result,
@@ -1162,7 +1177,7 @@ function buildProductionSummary() {
   }
 
   return {
-    updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    updatedAt: formatLocalTime(),
     orderCount: orders.length,
     groups: ["pizzas", "esfihas", "porcoes", "combos", "outros"]
       .map((key) => groups.get(key))
@@ -1434,7 +1449,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/kds-orders") {
     sendJson(response, 200, {
-      updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      updatedAt: formatLocalTime(),
       orders: buildKdsOrders(),
     });
     return;
@@ -1442,7 +1457,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/kds-ready-orders") {
     sendJson(response, 200, {
-      updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      updatedAt: formatLocalTime(),
       orders: buildKdsReadyOrders(),
     });
     return;

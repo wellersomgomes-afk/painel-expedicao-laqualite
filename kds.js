@@ -13,6 +13,7 @@ const viewTabs = document.querySelectorAll(".kds-view-tab");
 const serviceTabs = document.querySelectorAll(".kds-service-tab");
 const fullscreenButton = document.querySelector("#kds-fullscreen-button");
 const menuToggle = document.querySelector("#kds-menu-toggle");
+const APP_TIME_ZONE = "America/Sao_Paulo";
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
 let activeService = localStorage.getItem("kdsActiveService") || "both";
@@ -42,6 +43,7 @@ function formatReadyTime(order) {
   }
 
   return new Date(Number(order.readyAt)).toLocaleTimeString("pt-BR", {
+    timeZone: APP_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
   });
