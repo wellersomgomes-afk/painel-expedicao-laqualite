@@ -972,7 +972,17 @@ async function syncOpenOrders() {
     throw new Error(`Falha ao sincronizar pedidos abertos: HTTP ${response.status}`);
   }
 
-  const payload = await response.json();
+  const responseText = await response.text();
+  let payload = null;
+
+  try {
+    payload = JSON.parse(responseText);
+  } catch (error) {
+    throw new Error(
+      `Falha ao sincronizar pedidos abertos: o Cardapio Web retornou uma pagina em vez de JSON. Verifique CARDAPIO_ORDERS_URL no Render. Inicio da resposta: ${responseText.slice(0, 120)}`
+    );
+  }
+
   const syncedOrders = normalizeSyncedOrders(payload, readOrders());
 
   writeOrders(syncedOrders);
