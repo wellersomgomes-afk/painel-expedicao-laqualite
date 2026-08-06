@@ -179,10 +179,14 @@ function tokenUrlsFromOrderUrl(orderURL) {
     return [CARDAPIO_TOKEN_URL];
   }
 
+  const parsedOrderUrl = new URL(orderURL);
+  const origin = parsedOrderUrl.origin;
   const orderBaseUrl = orderURL.split("/orders/")[0];
   const baseWithoutVersion = orderBaseUrl.replace(/\/v\d+$/, "");
 
   return [
+    `${origin}/oauth/token`,
+    `${origin}/api/oauth/token`,
     `${orderBaseUrl}/oauth/token`,
     `${baseWithoutVersion}/oauth/token`,
     "https://integracao.cardapioweb.com/api/open_delivery/oauth/token",
@@ -203,22 +207,45 @@ async function getCardapioToken(orderURL) {
   let data = null;
 
   for (const tokenUrl of tokenUrlsFromOrderUrl(orderURL)) {
-    const response = await fetch(tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: CARDAPIO_CLIENT_ID,
-        client_secret: CARDAPIO_CLIENT_SECRET,
-        grant_type: "client_credentials",
-      }),
-    });
+    const tokenRequests = [
+      {
+        name: "form",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: CARDAPIO_CLIENT_ID,
+          client_secret: CARDAPIO_CLIENT_SECRET,
+          grant_type: "client_credentials",
+        }),
+      },
+      {
+        name: "json",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: CARDAPIO_CLIENT_ID,
+          client_secret: CARDAPIO_CLIENT_SECRET,
+          grant_type: "client_credentials",
+        }),
+      },
+    ];
 
-    if (response.ok) {
-      data = await response.json();
-      break;
+    for (const tokenRequest of tokenRequests) {
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: tokenRequest.headers,
+        body: tokenRequest.body,
+      });
+
+      if (response.ok) {
+        data = await response.json();
+        break;
+      }
+
+      lastError = `${tokenUrl} (${tokenRequest.name}) retornou HTTP ${response.status}`;
     }
 
-    lastError = `${tokenUrl} retornou HTTP ${response.status}`;
+    if (data) {
+      break;
+    }
   }
 
   if (!data) {
