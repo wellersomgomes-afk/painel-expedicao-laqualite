@@ -56,24 +56,10 @@ function isBorderText(value) {
 }
 
 function isPizzaItem(item) {
-  const complementText = (item.complements || [])
-    .map((complement) => complement.name)
-    .join(" ");
-  const text = normalizeText(`${item.category || ""} ${item.name || ""} ${complementText}`);
-  const sweetPizzaWords = [
-    "pizza doce",
-    "pizzas doces",
-    "chocolate",
-    "brigadeiro",
-    "banana",
-    "nutella",
-    "prestigio",
-    "goiabada",
-    "romeu",
-    "sensacao",
-  ];
+  const category = normalizeText(item.category || "");
+  const name = normalizeText(item.name || "");
 
-  return text.includes("pizza") || text.includes("pizzas") || sweetPizzaWords.some((word) => text.includes(word));
+  return category.includes("pizza") || name.includes("pizza");
 }
 
 function filterOrderForPizza(order) {
