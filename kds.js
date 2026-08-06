@@ -49,9 +49,17 @@ function renderComplement(complement) {
   `;
 }
 
+function renderItemNote(note) {
+  return `
+    <div class="kds-item-note">
+      <span>Obs:</span>
+      <strong>${note}</strong>
+    </div>
+  `;
+}
+
 function renderItem(item) {
-  const notes = item.notes ? [{ name: item.notes, quantity: 1 }] : [];
-  const complements = [...(item.complements || []), ...notes];
+  const complements = item.complements || [];
   const hasBorderHighlight = isBorderText(item.name) || complements.some((complement) => isBorderText(complement.name));
 
   return `
@@ -65,6 +73,7 @@ function renderItem(item) {
           ${complements.map(renderComplement).join("")}
         </ul>
       ` : ""}
+      ${item.notes ? renderItemNote(item.notes) : ""}
     </article>
   `;
 }

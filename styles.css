@@ -573,6 +573,24 @@ h1 {
   font-weight: 900;
 }
 
+.kds-item-note {
+  display: flex;
+  gap: 6px;
+  padding: 2px 10px 0;
+  color: #ff8a3d;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.kds-item-note span,
+.kds-item-note strong {
+  font-weight: 900;
+}
+
+.kds-item-note strong {
+  overflow-wrap: anywhere;
+}
+
 .kds-empty {
   grid-column: 1 / -1;
   border: 1px solid var(--line);
@@ -639,6 +657,10 @@ h1 {
   font-size: 18px;
 }
 
+.kds-size-compact .kds-item-note {
+  font-size: 17px;
+}
+
 .kds-size-compact .kds-ready-button {
   min-height: 48px;
   margin: 0 12px 12px;
@@ -682,6 +704,10 @@ h1 {
 
 .kds-size-large .kds-complement-border {
   font-size: 28px;
+}
+
+.kds-size-large .kds-item-note {
+  font-size: 26px;
 }
 
 .kds-size-large .kds-ready-button {

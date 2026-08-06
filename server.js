@@ -398,11 +398,94 @@ function normalizeOrderItems(order) {
           "product.categoryName",
           "produto.categoria.nome",
         ]) || ""),
-        notes: String(getDeepValue(item, ["notes", "observation", "observations", "comentario"]) || ""),
+        notes: extractNoteText(item),
         complements: normalizeComplements(item),
       };
     })
     .filter(Boolean);
+}
+
+function textFromNoteValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(textFromNoteValue).filter(Boolean).join(" | ");
+  }
+
+  if (typeof value === "object") {
+    return String(getDeepValue(value, [
+      "text",
+      "value",
+      "name",
+      "description",
+      "message",
+      "note",
+      "observation",
+      "comment",
+    ]) || "");
+  }
+
+  return "";
+}
+
+function extractNoteText(source) {
+  const noteValue = getDeepValue(source, [
+    "notes",
+    "note",
+    "observation",
+    "observations",
+    "comments",
+    "comment",
+    "specialInstructions",
+    "specialInstruction",
+    "additionalInfo",
+    "additionalInformation",
+    "preparationInstructions",
+    "preparationInstruction",
+    "customerNotes",
+    "customerNote",
+    "orderNotes",
+    "orderNote",
+    "itemNotes",
+    "itemNote",
+    "comentario",
+    "comentarios",
+    "observacao",
+    "observacoes",
+    "instrucoes",
+  ]) || findValueByKeyNames(source, [
+    "notes",
+    "note",
+    "observation",
+    "observations",
+    "comments",
+    "comment",
+    "specialInstructions",
+    "specialInstruction",
+    "additionalInfo",
+    "additionalInformation",
+    "preparationInstructions",
+    "preparationInstruction",
+    "customerNotes",
+    "customerNote",
+    "orderNotes",
+    "orderNote",
+    "itemNotes",
+    "itemNote",
+    "comentario",
+    "comentarios",
+    "observacao",
+    "observacoes",
+    "instrucoes",
+  ]);
+
+  return textFromNoteValue(noteValue);
 }
 
 function normalizeComplements(item) {
@@ -873,21 +956,7 @@ function normalizeOrder(payload) {
         order.createdDateTime
     ),
     rawStatus: String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || ""),
-    notes: String(getDeepValue(order, [
-      "notes",
-      "note",
-      "observation",
-      "observations",
-      "customerNotes",
-      "customerNote",
-      "orderNotes",
-      "orderNote",
-      "preparationNotes",
-      "preparationNote",
-      "comentario",
-      "observacao",
-      "observacoes",
-    ]) || ""),
+    notes: extractNoteText(order),
     items: normalizeOrderItems(order),
   };
 }
@@ -986,7 +1055,10 @@ function buildKdsOrders() {
       neighborhood: order.neighborhood,
       arrivedAt: order.arrivedAt,
       notes: order.notes || "",
-      items: order.items,
+      items: order.items.map((item) => ({
+        ...item,
+        notes: item.notes || extractNoteText(item),
+      })),
     }));
 }
 
