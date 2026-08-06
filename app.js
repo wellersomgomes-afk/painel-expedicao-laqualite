@@ -23,6 +23,7 @@ const eventsList = document.querySelector("#events-list");
 const tabs = document.querySelectorAll(".tab");
 const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
+const fullscreenButton = document.querySelector("#fullscreen-button");
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -70,6 +71,27 @@ function displayNeighborhood(order) {
   return isPickup(order) || order.neighborhood === "Bairro nao informado"
     ? "Retirada"
     : order.neighborhood;
+}
+
+function updateFullscreenButton() {
+  if (!fullscreenButton) {
+    return;
+  }
+
+  fullscreenButton.textContent = document.fullscreenElement ? "Sair" : "Tela cheia";
+}
+
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await document.documentElement.requestFullscreen();
+  } catch (error) {
+    updateFullscreenButton();
+  }
 }
 
 function renderOrders() {
@@ -236,12 +258,21 @@ async function loadDispatchedOrders() {
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
+    if (tab.id === "fullscreen-button") {
+      toggleFullscreen();
+      return;
+    }
+
     activeFilter = tab.dataset.filter;
 
     tabs.forEach((item) => item.classList.toggle("active", item === tab));
     renderOrders();
   });
 });
+
+if (fullscreenButton) {
+  document.addEventListener("fullscreenchange", updateFullscreenButton);
+}
 
 limitInput.addEventListener("input", () => {
   const nextLimit = Number(limitInput.value);
@@ -256,6 +287,7 @@ limitInput.addEventListener("input", () => {
 });
 
 loadOrders();
+updateFullscreenButton();
 loadDispatchedOrders();
 loadEvents();
 setInterval(loadOrders, 5000);
