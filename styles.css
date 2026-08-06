@@ -379,10 +379,22 @@ h1 {
   font-size: clamp(42px, 5vw, 66px);
 }
 
-.kds-screen .panel-link {
-  min-height: 44px;
-  padding: 0 18px;
-  font-size: 18px;
+.kds-screen .panel-link,
+.kds-fullscreen-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.kds-fullscreen-button {
+  font-family: inherit;
 }
 
 .kds-screen .summary {
@@ -419,14 +431,14 @@ h1 {
 }
 
 .kds-size-button {
-  min-width: 92px;
-  min-height: 42px;
+  min-width: 76px;
+  min-height: 34px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -456,13 +468,13 @@ h1 {
 
 .kds-view-tab,
 .kds-service-tab {
-  min-height: 46px;
+  min-height: 38px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 900;
 }
 
@@ -926,19 +938,20 @@ h1 {
   }
 
   .kds-size-button,
-  .panel-link {
+  .panel-link,
+  .kds-fullscreen-button {
     width: 100%;
-    min-height: 42px;
+    min-height: 36px;
   }
 
   .kds-service-tabs {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .kds-view-tab,
   .kds-service-tab {
-    min-height: 44px;
-    font-size: 18px;
+    min-height: 38px;
+    font-size: 16px;
   }
 
   .kds-section-grid {

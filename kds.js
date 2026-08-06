@@ -11,6 +11,7 @@ const grid = document.querySelector("#kds-grid");
 const sizeButtons = document.querySelectorAll(".kds-size-button");
 const viewTabs = document.querySelectorAll(".kds-view-tab");
 const serviceTabs = document.querySelectorAll(".kds-service-tab");
+const fullscreenButton = document.querySelector("#kds-fullscreen-button");
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
 let activeService = localStorage.getItem("kdsActiveService") || "both";
@@ -203,6 +204,27 @@ function applyActiveService() {
   });
 }
 
+function updateFullscreenButton() {
+  if (!fullscreenButton) {
+    return;
+  }
+
+  fullscreenButton.textContent = document.fullscreenElement ? "Sair" : "Tela cheia";
+}
+
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await document.documentElement.requestFullscreen();
+  } catch (error) {
+    updateFullscreenButton();
+  }
+}
+
 function currentOrders() {
   const sourceOrders = activeView === "ready" ? board.readyOrders : board.productionOrders;
 
@@ -342,6 +364,11 @@ serviceTabs.forEach((button) => {
   });
 });
 
+if (fullscreenButton) {
+  fullscreenButton.addEventListener("click", toggleFullscreen);
+  document.addEventListener("fullscreenchange", updateFullscreenButton);
+}
+
 grid.addEventListener("click", (event) => {
   const itemButton = event.target.closest(".kds-item-ready-button");
   const orderButton = event.target.closest(".kds-ready-button");
@@ -359,6 +386,7 @@ grid.addEventListener("click", (event) => {
 applyCardSize();
 applyActiveView();
 applyActiveService();
+updateFullscreenButton();
 loadKdsOrders();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);
