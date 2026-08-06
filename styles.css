@@ -365,6 +365,38 @@ h1 {
   width: min(1700px, 100%);
 }
 
+.kds-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kds-size-control {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.kds-size-button {
+  min-width: 105px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.kds-size-button.active {
+  background: var(--text);
+  color: #101318;
+}
+
 .kds-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -379,6 +411,24 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.kds-ready-button {
+  width: calc(100% - 36px);
+  min-height: 58px;
+  margin: 0 18px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ok);
+  color: #101318;
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.kds-ready-button:disabled {
+  cursor: wait;
+  opacity: 0.75;
 }
 
 .kds-order-head {
@@ -506,6 +556,102 @@ h1 {
   background: var(--panel);
 }
 
+.kds-size-compact .kds-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.kds-size-compact .kds-order-card {
+  min-height: 290px;
+}
+
+.kds-size-compact .kds-order-head {
+  padding: 14px 16px;
+}
+
+.kds-size-compact .kds-order-head strong {
+  font-size: 28px;
+}
+
+.kds-size-compact .kds-order-head span,
+.kds-size-compact .kds-order-time {
+  font-size: 18px;
+}
+
+.kds-size-compact .kds-service {
+  padding: 8px 16px;
+  font-size: 15px;
+}
+
+.kds-size-compact .kds-order-items {
+  gap: 8px;
+  padding: 12px;
+}
+
+.kds-size-compact .kds-order-item {
+  gap: 8px;
+  padding: 10px;
+}
+
+.kds-size-compact .kds-product-line strong,
+.kds-size-compact .kds-product-line span {
+  font-size: 20px;
+}
+
+.kds-size-compact .kds-complement {
+  padding: 6px 8px;
+  font-size: 17px;
+}
+
+.kds-size-compact .kds-complement-border {
+  font-size: 18px;
+}
+
+.kds-size-compact .kds-ready-button {
+  min-height: 48px;
+  margin: 0 12px 12px;
+  width: calc(100% - 24px);
+  font-size: 20px;
+}
+
+.kds-size-large .kds-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kds-size-large .kds-order-card {
+  min-height: 460px;
+}
+
+.kds-size-large .kds-order-head strong {
+  font-size: 44px;
+}
+
+.kds-size-large .kds-order-head span,
+.kds-size-large .kds-order-time {
+  font-size: 28px;
+}
+
+.kds-size-large .kds-service {
+  font-size: 22px;
+}
+
+.kds-size-large .kds-product-line strong,
+.kds-size-large .kds-product-line span {
+  font-size: 32px;
+}
+
+.kds-size-large .kds-complement {
+  font-size: 26px;
+}
+
+.kds-size-large .kds-complement-border {
+  font-size: 28px;
+}
+
+.kds-size-large .kds-ready-button {
+  min-height: 70px;
+  font-size: 30px;
+}
+
 @media (max-width: 760px) {
   .screen {
     padding: 18px;
@@ -516,11 +662,19 @@ h1 {
     flex-direction: column;
   }
 
+  .kds-actions,
+  .kds-size-control {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .tabs,
   .summary,
   .settings-panel,
   .events-panel,
-  .kds-grid {
+  .kds-grid,
+  .kds-size-compact .kds-grid,
+  .kds-size-large .kds-grid {
     grid-template-columns: 1fr;
   }
 

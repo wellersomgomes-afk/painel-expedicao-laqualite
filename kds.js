@@ -6,6 +6,8 @@ let summary = {
 const orderCount = document.querySelector("#kds-order-count");
 const updatedAt = document.querySelector("#kds-updated-at");
 const grid = document.querySelector("#kds-grid");
+const sizeButtons = document.querySelectorAll(".kds-size-button");
+let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 
 function elapsedSeconds(order) {
   return Math.max(Math.floor((Date.now() - Number(order.arrivedAt || Date.now())) / 1000), 0);
@@ -33,9 +35,7 @@ function normalizeText(value) {
 }
 
 function isBorderText(value) {
-  const text = normalizeText(value);
-
-  return text.includes("borda");
+  return normalizeText(value).includes("borda");
 }
 
 function renderComplement(complement) {
@@ -73,7 +73,7 @@ function renderOrder(order) {
   const service = order.fulfillmentType === "pickup" ? "Retirada" : order.neighborhood || "Entrega";
 
   return `
-    <article class="kds-order-card">
+    <article class="kds-order-card" data-number="${order.number}" data-order-id="${order.orderId || ""}">
       <header class="kds-order-head">
         <div>
           <strong>#${order.number}</strong>
@@ -85,16 +85,29 @@ function renderOrder(order) {
       <div class="kds-order-items">
         ${order.items.map(renderItem).join("")}
       </div>
+      <button class="kds-ready-button" type="button" data-number="${order.number}" data-order-id="${order.orderId || ""}">
+        Pronto
+      </button>
     </article>
   `;
 }
 
+function applyCardSize() {
+  document.body.classList.remove("kds-size-compact", "kds-size-normal", "kds-size-large");
+  document.body.classList.add(`kds-size-${cardSize}`);
+
+  sizeButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.size === cardSize);
+  });
+}
+
 function renderKds() {
+  applyCardSize();
   orderCount.textContent = String(summary.orders?.length || 0);
   updatedAt.textContent = summary.updatedAt || "--:--";
 
   if (!summary.orders || summary.orders.length === 0) {
-    grid.innerHTML = '<div class="empty kds-empty">Nenhum pedido em produção no momento.</div>';
+    grid.innerHTML = '<div class="empty kds-empty">Nenhum pedido em producao no momento.</div>';
     return;
   }
 
@@ -115,6 +128,53 @@ async function loadKdsOrders() {
   renderKds();
 }
 
+async function markOrderReady(button) {
+  button.disabled = true;
+  button.textContent = "Salvando...";
+
+  try {
+    const response = await fetch("/api/kds-ready", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number: button.dataset.number,
+        orderId: button.dataset.orderId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Falha ao marcar pronto");
+    }
+
+    summary.orders = summary.orders.filter((order) =>
+      String(order.number) !== String(button.dataset.number) &&
+      String(order.orderId || "") !== String(button.dataset.orderId || "")
+    );
+    renderKds();
+    loadKdsOrders();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "Pronto";
+  }
+}
+
+sizeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    cardSize = button.dataset.size;
+    localStorage.setItem("kdsCardSize", cardSize);
+    applyCardSize();
+  });
+});
+
+grid.addEventListener("click", (event) => {
+  const button = event.target.closest(".kds-ready-button");
+
+  if (button) {
+    markOrderReady(button);
+  }
+});
+
+applyCardSize();
 loadKdsOrders();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);

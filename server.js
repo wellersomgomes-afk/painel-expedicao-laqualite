@@ -9,6 +9,7 @@ const DATA_DIR = path.join(ROOT, "data");
 const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
 const EVENTS_FILE = path.join(DATA_DIR, "events.json");
 const DISPATCHED_FILE = path.join(DATA_DIR, "dispatched-orders.json");
+const KDS_READY_FILE = path.join(DATA_DIR, "kds-ready-orders.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
@@ -45,6 +46,10 @@ function ensureDataFile() {
 
   if (!fs.existsSync(DISPATCHED_FILE)) {
     fs.writeFileSync(DISPATCHED_FILE, JSON.stringify([], null, 2));
+  }
+
+  if (!fs.existsSync(KDS_READY_FILE)) {
+    fs.writeFileSync(KDS_READY_FILE, JSON.stringify([], null, 2));
   }
 }
 
@@ -99,6 +104,49 @@ function readDispatchedOrders() {
 function writeDispatchedOrders(orders) {
   ensureDataFile();
   fs.writeFileSync(DISPATCHED_FILE, JSON.stringify(orders.slice(0, 50), null, 2));
+}
+
+function readKdsReadyOrders() {
+  ensureDataFile();
+  return readJsonFile(KDS_READY_FILE);
+}
+
+function writeKdsReadyOrders(orders) {
+  ensureDataFile();
+  fs.writeFileSync(KDS_READY_FILE, JSON.stringify(orders.slice(0, 300), null, 2));
+}
+
+function isSameOrder(left, right) {
+  return (
+    String(left.number || "") === String(right.number || "") ||
+    String(left.orderId || "") === String(right.orderId || "")
+  );
+}
+
+function markKdsOrderReady(target) {
+  const orders = readOrders();
+  const order = orders.find((item) => isSameOrder(item, target));
+
+  if (!order) {
+    return { ok: false, message: "Pedido nao encontrado no KDS." };
+  }
+
+  const readyOrders = readKdsReadyOrders().filter((item) => !isSameOrder(item, order));
+
+  readyOrders.unshift({
+    number: order.number,
+    orderId: order.orderId,
+    customer: order.customer,
+    readyAt: Date.now(),
+  });
+
+  writeKdsReadyOrders(readyOrders);
+
+  return {
+    ok: true,
+    action: "ready",
+    order: order.number,
+  };
 }
 
 function recordDispatchedOrder(order, payload) {
@@ -909,11 +957,15 @@ function buildProductionSummary() {
 }
 
 function buildKdsOrders() {
+  const readyOrders = readKdsReadyOrders();
+
   return readOrders()
     .filter((order) => Array.isArray(order.items) && order.items.length > 0)
+    .filter((order) => !readyOrders.some((readyOrder) => isSameOrder(order, readyOrder)))
     .sort((a, b) => a.arrivedAt - b.arrivedAt)
     .map((order) => ({
       number: order.number,
+      orderId: order.orderId,
       customer: order.customer,
       fulfillmentType: order.fulfillmentType,
       neighborhood: order.neighborhood,
@@ -1080,7 +1132,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -1117,6 +1169,17 @@ const server = http.createServer(async (request, response) => {
       updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       orders: buildKdsOrders(),
     });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/kds-ready") {
+    try {
+      const body = await readBody(request);
+      const result = markKdsOrderReady(body);
+      sendJson(response, result.ok ? 200 : 404, result);
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: "Pedido invalido." });
+    }
     return;
   }
 
