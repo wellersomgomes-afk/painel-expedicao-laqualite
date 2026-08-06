@@ -365,30 +365,68 @@ h1 {
   width: min(1700px, 100%);
 }
 
+.kds-screen .topbar {
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.kds-screen .eyebrow {
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+.kds-screen h1 {
+  font-size: clamp(42px, 5vw, 66px);
+}
+
+.kds-screen .panel-link {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 18px;
+}
+
+.kds-screen .summary {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kds-screen .summary-item {
+  min-height: 58px;
+  padding: 10px 16px;
+}
+
+.kds-screen .summary-item span {
+  font-size: 18px;
+}
+
+.kds-screen .summary-item strong {
+  font-size: 36px;
+}
+
 .kds-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .kds-size-control {
   display: flex;
-  gap: 8px;
-  padding: 6px;
+  gap: 6px;
+  padding: 4px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
 }
 
 .kds-size-button {
-  min-width: 105px;
-  min-height: 52px;
+  min-width: 92px;
+  min-height: 42px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -400,9 +438,9 @@ h1 {
 .kds-view-tabs,
 .kds-service-tabs {
   display: grid;
-  gap: 10px;
-  margin-bottom: 18px;
-  padding: 6px;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 4px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -418,13 +456,13 @@ h1 {
 
 .kds-view-tab,
 .kds-service-tab {
-  min-height: 64px;
+  min-height: 46px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 24px;
+  font-size: 19px;
   font-weight: 900;
 }
 
@@ -436,34 +474,34 @@ h1 {
 
 .kds-grid {
   display: grid;
-  gap: 22px;
+  gap: 14px;
 }
 
 .kds-section {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .kds-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 58px;
+  min-height: 48px;
   padding: 0 18px;
-  border: 1px solid var(--line);
+  border: 1px solid #465061;
   border-radius: 8px;
-  background: var(--panel);
+  background: #202833;
 }
 
 .kds-section-head span {
   color: var(--muted);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .kds-section-head strong {
-  font-size: 34px;
+  font-size: 32px;
   line-height: 1;
 }
 
@@ -478,9 +516,10 @@ h1 {
   min-height: 360px;
   display: grid;
   align-content: start;
-  border: 1px solid var(--line);
+  border: 2px solid #465061;
   border-radius: 8px;
-  background: var(--panel);
+  background: #1d2630;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
 }
 
 .kds-order-card.is-ready {
@@ -844,20 +883,41 @@ h1 {
 
 @media (max-width: 1180px) {
   .screen.kds-screen {
-    padding: 16px;
+    padding: 12px;
   }
 
   .kds-screen .topbar {
     align-items: stretch;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .kds-screen h1 {
+    font-size: 42px;
+  }
+
+  .kds-screen .summary {
+    margin-bottom: 10px;
+  }
+
+  .kds-screen .summary-item {
+    min-height: 52px;
+    padding: 8px 14px;
+  }
+
+  .kds-screen .summary-item span {
+    font-size: 17px;
+  }
+
+  .kds-screen .summary-item strong {
+    font-size: 32px;
   }
 
   .kds-actions {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   .kds-size-control {
@@ -868,6 +928,7 @@ h1 {
   .kds-size-button,
   .panel-link {
     width: 100%;
+    min-height: 42px;
   }
 
   .kds-service-tabs {
@@ -876,8 +937,8 @@ h1 {
 
   .kds-view-tab,
   .kds-service-tab {
-    min-height: 58px;
-    font-size: 21px;
+    min-height: 44px;
+    font-size: 18px;
   }
 
   .kds-section-grid {
