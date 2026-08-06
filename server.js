@@ -378,6 +378,27 @@ function normalizeOrder(payload) {
 }
 
 function isDispatchEvent(payload, normalizedOrder) {
+  const eventType = String(payload.eventType || "").toUpperCase();
+  const activeEventTypes = new Set(["CREATED", "CONFIRMED", "ACCEPTED", "PREPARING", "READY"]);
+  const removeEventTypes = new Set([
+    "DISPATCHED",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "CONCLUDED",
+    "FINISHED",
+    "COMPLETED",
+    "CANCELED",
+    "CANCELLED",
+  ]);
+
+  if (activeEventTypes.has(eventType)) {
+    return false;
+  }
+
+  if (removeEventTypes.has(eventType)) {
+    return true;
+  }
+
   const eventText = [
     payload.eventType,
     payload.event,
@@ -407,7 +428,6 @@ function isDispatchEvent(payload, normalizedOrder) {
     "delivered",
     "delivery",
     "concluded",
-    "conclusion",
     "finished",
     "completed",
     "cancel",
