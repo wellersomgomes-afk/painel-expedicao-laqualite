@@ -41,17 +41,17 @@ function formatTimer(order) {
 }
 
 function isLate(order) {
-  return elapsedMinutes(order) > lateLimitMinutes;
+  return elapsedMinutes(order) >= lateLimitMinutes;
 }
 
 function statusFor(order) {
   const minutes = elapsedMinutes(order);
 
-  if (minutes > lateLimitMinutes) {
+  if (minutes >= lateLimitMinutes) {
     return { label: "Atrasado", className: "late" };
   }
 
-  if (minutes >= Math.max(lateLimitMinutes - 5, 0)) {
+  if (minutes >= Math.max(lateLimitMinutes - 1, 0)) {
     return { label: "Atencao", className: "warning" };
   }
 
