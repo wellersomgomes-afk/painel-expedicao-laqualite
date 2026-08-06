@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Painel Expedicao La Qualite</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="screen">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">La Qualite</p>
+          <h1>Painel de Expedicao</h1>
+        </div>
+
+        <nav class="tabs" aria-label="Filtro de pedidos">
+          <button class="tab active" type="button" data-filter="all">Todos</button>
+          <button class="tab" type="button" data-filter="late">Atrasados</button>
+          <button class="tab" type="button" data-filter="settings">Tempo</button>
+          <button class="tab" type="button" data-filter="events">Eventos</button>
+        </nav>
+      </header>
+
+      <section class="summary" aria-label="Resumo dos pedidos">
+        <div class="summary-item">
+          <span>Pedidos na loja</span>
+          <strong id="total-count">0</strong>
+        </div>
+        <div class="summary-item danger">
+          <span>Atrasados</span>
+          <strong id="late-count">0</strong>
+        </div>
+      </section>
+
+      <section class="settings-panel" id="settings-panel" aria-label="Tempo de saida da loja" hidden>
+        <div class="settings-copy">
+          <span>Tempo de saida da loja</span>
+          <strong><span id="limit-label">30</span> minutos</strong>
+        </div>
+
+        <label class="time-control">
+          <span>Minutos para considerar atrasado</span>
+          <input id="limit-input" type="number" min="5" max="120" step="1" value="30" />
+        </label>
+      </section>
+
+      <section class="events-panel" id="events-panel" aria-label="Eventos recebidos" hidden>
+        <div class="events-head">
+          <span>Ultimos eventos recebidos do Cardapio Web</span>
+          <strong id="events-count">0</strong>
+        </div>
+        <div class="events-list" id="events-list"></div>
+      </section>
+
+      <section class="orders" id="orders-panel" aria-label="Lista de pedidos">
+        <div class="orders-head">
+          <span>Pedido</span>
+          <span>Cliente</span>
+          <span>Bairro</span>
+          <span>Tempo na loja</span>
+          <span>Status</span>
+        </div>
+
+        <div class="order-list" id="order-list"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
