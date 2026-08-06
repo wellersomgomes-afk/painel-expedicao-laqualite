@@ -844,20 +844,46 @@ h1 {
 
 @media (max-width: 1180px) {
   .screen.kds-screen {
-    padding: 20px;
+    padding: 16px;
   }
 
   .kds-screen .topbar {
     align-items: stretch;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
+    margin-bottom: 16px;
   }
 
   .kds-actions {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
-  .kds-section-grid,
+  .kds-size-control {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .kds-size-button,
+  .panel-link {
+    width: 100%;
+  }
+
+  .kds-service-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .kds-view-tab,
+  .kds-service-tab {
+    min-height: 58px;
+    font-size: 21px;
+  }
+
+  .kds-section-grid {
+    grid-template-columns: 1fr;
+  }
+
   .kds-size-compact .kds-section-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -870,6 +896,47 @@ h1 {
     min-height: 0;
   }
 
+  .kds-order-head {
+    padding: 16px;
+  }
+
+  .kds-order-head strong {
+    font-size: 38px;
+  }
+
+  .kds-order-head span,
+  .kds-order-time {
+    font-size: 24px;
+  }
+
+  .kds-service {
+    padding: 12px 16px;
+    font-size: 20px;
+  }
+
+  .kds-order-items {
+    padding: 14px;
+  }
+
+  .kds-product-line strong,
+  .kds-product-line span {
+    font-size: 28px;
+    line-height: 1.08;
+  }
+
+  .kds-complement {
+    font-size: 22px;
+  }
+
+  .kds-item-note {
+    font-size: 22px;
+  }
+
+  .kds-item-ready-button {
+    min-height: 58px;
+    font-size: 22px;
+  }
+
   .kds-ready-button,
   .kds-ready-stamp {
     min-height: 68px;
@@ -879,7 +946,7 @@ h1 {
 
 @media (max-width: 760px) {
   .screen {
-    padding: 18px;
+    padding: 12px;
   }
 
   .topbar {
@@ -904,6 +971,39 @@ h1 {
   .kds-size-compact .kds-section-grid,
   .kds-size-large .kds-section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .kds-size-control {
+    grid-template-columns: 1fr;
+  }
+
+  .kds-view-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .kds-order-head {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .kds-order-time {
+    width: fit-content;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: #101318;
+  }
+
+  .kds-product-line {
+    grid-template-columns: 1fr;
+  }
+
+  .kds-quantity {
+    min-width: 58px;
+  }
+
+  .kds-complement {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .tabs {
