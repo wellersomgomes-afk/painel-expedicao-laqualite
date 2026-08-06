@@ -397,9 +397,9 @@ h1 {
   color: #101318;
 }
 
-.kds-view-tabs {
+.kds-view-tabs,
+.kds-service-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
   padding: 6px;
@@ -408,7 +408,16 @@ h1 {
   background: var(--panel);
 }
 
-.kds-view-tab {
+.kds-view-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kds-service-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kds-view-tab,
+.kds-service-tab {
   min-height: 64px;
   border: 0;
   border-radius: 6px;
@@ -419,7 +428,8 @@ h1 {
   font-weight: 900;
 }
 
-.kds-view-tab.active {
+.kds-view-tab.active,
+.kds-service-tab.active {
   background: var(--text);
   color: #101318;
 }
@@ -682,6 +692,22 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.kds-item-ready-button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 6px;
+  background: #7aa7ff;
+  color: #101318;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.kds-item-ready-button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
 .kds-empty {
   grid-column: 1 / -1;
   border: 1px solid var(--line);
@@ -752,6 +778,11 @@ h1 {
   font-size: 17px;
 }
 
+.kds-size-compact .kds-item-ready-button {
+  min-height: 40px;
+  font-size: 16px;
+}
+
 .kds-size-compact .kds-ready-button {
   min-height: 48px;
   margin: 0 12px 12px;
@@ -799,6 +830,11 @@ h1 {
 
 .kds-size-large .kds-item-note {
   font-size: 26px;
+}
+
+.kds-size-large .kds-item-ready-button {
+  min-height: 60px;
+  font-size: 24px;
 }
 
 .kds-size-large .kds-ready-button {
@@ -853,7 +889,8 @@ h1 {
 
   .kds-actions,
   .kds-size-control,
-  .kds-view-tabs {
+  .kds-view-tabs,
+  .kds-service-tabs {
     display: grid;
     grid-template-columns: 1fr;
   }

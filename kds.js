@@ -10,8 +10,10 @@ const updatedAt = document.querySelector("#kds-updated-at");
 const grid = document.querySelector("#kds-grid");
 const sizeButtons = document.querySelectorAll(".kds-size-button");
 const viewTabs = document.querySelectorAll(".kds-view-tab");
+const serviceTabs = document.querySelectorAll(".kds-service-tab");
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
+let activeService = localStorage.getItem("kdsActiveService") || "both";
 
 function elapsedSeconds(order) {
   return Math.max(Math.floor((Date.now() - Number(order.arrivedAt || Date.now())) / 1000), 0);
@@ -89,11 +91,12 @@ function renderItemNote(note) {
   `;
 }
 
-function renderItem(item) {
+function renderItem(item, order) {
   const complements = item.complements || [];
   const hasBorderHighlight = isBorderText(item.name) || complements.some((complement) => isBorderText(complement.name));
   const quantity = Number(item.quantity || 0);
   const quantityClass = quantity >= 2 ? " kds-quantity-alert" : "";
+  const shouldShowItemReady = activeView !== "ready" && order.items.length >= 2;
 
   return `
     <article class="kds-order-item${hasBorderHighlight ? " has-border" : ""}">
@@ -107,6 +110,17 @@ function renderItem(item) {
         </ul>
       ` : ""}
       ${item.notes ? renderItemNote(item.notes) : ""}
+      ${shouldShowItemReady ? `
+        <button
+          class="kds-item-ready-button"
+          type="button"
+          data-number="${order.number}"
+          data-order-id="${order.orderId || ""}"
+          data-item-key="${item.kdsItemKey || ""}"
+        >
+          Produto pronto
+        </button>
+      ` : ""}
     </article>
   `;
 }
@@ -132,7 +146,7 @@ function renderOrder(order) {
         </div>
       ` : ""}
       <div class="kds-order-items">
-        ${order.items.map(renderItem).join("")}
+        ${order.items.map((item) => renderItem(item, order)).join("")}
       </div>
       ${isReadyView ? `
         <div class="kds-ready-stamp">Pedido pronto</div>
@@ -182,15 +196,29 @@ function applyActiveView() {
   });
 }
 
+function applyActiveService() {
+  serviceTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.service === activeService);
+  });
+}
+
 function currentOrders() {
   const sourceOrders = activeView === "ready" ? board.readyOrders : board.productionOrders;
 
-  return sourceOrders.map(filterOrderForPizza).filter(Boolean);
+  return sourceOrders
+    .filter((order) =>
+      activeService === "both" ||
+      (activeService === "pickup" && isPickupOrder(order)) ||
+      (activeService === "delivery" && !isPickupOrder(order))
+    )
+    .map(filterOrderForPizza)
+    .filter(Boolean);
 }
 
 function renderKds() {
   applyCardSize();
   applyActiveView();
+  applyActiveService();
   const orders = currentOrders();
 
   countLabel.textContent = activeView === "ready" ? "Pedidos prontos" : "Pedidos em preparo";
@@ -263,6 +291,32 @@ async function markOrderReady(button) {
   }
 }
 
+async function markItemReady(button) {
+  button.disabled = true;
+  button.textContent = "Salvando...";
+
+  try {
+    const response = await fetch("/api/kds-item-ready", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number: button.dataset.number,
+        orderId: button.dataset.orderId,
+        itemKey: button.dataset.itemKey,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Falha ao marcar produto pronto");
+    }
+
+    await loadKdsOrders();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "Produto pronto";
+  }
+}
+
 sizeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     cardSize = button.dataset.size;
@@ -279,16 +333,31 @@ viewTabs.forEach((button) => {
   });
 });
 
-grid.addEventListener("click", (event) => {
-  const button = event.target.closest(".kds-ready-button");
+serviceTabs.forEach((button) => {
+  button.addEventListener("click", () => {
+    activeService = button.dataset.service;
+    localStorage.setItem("kdsActiveService", activeService);
+    renderKds();
+  });
+});
 
-  if (button) {
-    markOrderReady(button);
+grid.addEventListener("click", (event) => {
+  const itemButton = event.target.closest(".kds-item-ready-button");
+  const orderButton = event.target.closest(".kds-ready-button");
+
+  if (itemButton) {
+    markItemReady(itemButton);
+    return;
+  }
+
+  if (orderButton) {
+    markOrderReady(orderButton);
   }
 });
 
 applyCardSize();
 applyActiveView();
+applyActiveService();
 loadKdsOrders();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);

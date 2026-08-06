@@ -149,6 +149,63 @@ function markKdsOrderReady(target) {
   };
 }
 
+function kdsItemKey(item, index) {
+  return `${index}:${String(item.name || "").toLowerCase()}`;
+}
+
+function isPizzaKdsItem(item) {
+  const text = normalizeText(`${item.category || ""} ${item.name || ""}`);
+
+  return text.includes("pizza") || text.includes("pizzas");
+}
+
+function markKdsItemReady(target) {
+  const orders = readOrders();
+  const order = orders.find((item) => isSameOrder(item, target));
+
+  if (!order || !Array.isArray(order.items)) {
+    return { ok: false, message: "Pedido nao encontrado no KDS." };
+  }
+
+  const readyOrders = readKdsReadyOrders();
+  const readyIndex = readyOrders.findIndex((item) => isSameOrder(item, order));
+  const currentReady = readyIndex >= 0 ? readyOrders[readyIndex] : {
+    number: order.number,
+    orderId: order.orderId,
+    customer: order.customer,
+    readyItems: [],
+  };
+  const readyItems = new Set(currentReady.readyItems || []);
+
+  readyItems.add(String(target.itemKey || ""));
+
+  const pizzaKeys = order.items
+    .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
+    .filter(({ item }) => isPizzaKdsItem(item))
+    .map(({ key }) => key);
+  const isOrderReady = pizzaKeys.length > 0 && pizzaKeys.every((key) => readyItems.has(key));
+  const nextReady = {
+    ...currentReady,
+    readyItems: [...readyItems].filter(Boolean),
+    readyAt: isOrderReady ? Date.now() : currentReady.readyAt,
+  };
+
+  if (readyIndex >= 0) {
+    readyOrders[readyIndex] = nextReady;
+  } else {
+    readyOrders.unshift(nextReady);
+  }
+
+  writeKdsReadyOrders(readyOrders);
+
+  return {
+    ok: true,
+    action: isOrderReady ? "ready" : "item-ready",
+    order: order.number,
+    itemKey: target.itemKey || "",
+  };
+}
+
 function recordDispatchedOrder(order, payload) {
   const dispatchedOrders = readDispatchedOrders();
   const dispatchedOrder = {
@@ -1045,21 +1102,30 @@ function buildKdsOrders() {
 
   return readOrders()
     .filter((order) => Array.isArray(order.items) && order.items.length > 0)
-    .filter((order) => !readyOrders.some((readyOrder) => isSameOrder(order, readyOrder)))
+    .filter((order) => !readyOrders.some((readyOrder) => isSameOrder(order, readyOrder) && readyOrder.readyAt))
     .sort((a, b) => a.arrivedAt - b.arrivedAt)
-    .map((order) => ({
-      number: order.number,
-      orderId: order.orderId,
-      customer: order.customer,
-      fulfillmentType: order.fulfillmentType,
-      neighborhood: order.neighborhood,
-      arrivedAt: order.arrivedAt,
-      notes: order.notes || "",
-      items: order.items.map((item) => ({
-        ...item,
-        notes: item.notes || extractNoteText(item),
-      })),
-    }));
+    .map((order) => {
+      const readyOrder = readyOrders.find((item) => isSameOrder(item, order));
+      const readyItems = new Set(readyOrder?.readyItems || []);
+
+      return {
+        number: order.number,
+        orderId: order.orderId,
+        customer: order.customer,
+        fulfillmentType: order.fulfillmentType,
+        neighborhood: order.neighborhood,
+        arrivedAt: order.arrivedAt,
+        notes: order.notes || "",
+        items: order.items
+          .map((item, index) => ({
+            ...item,
+            kdsItemKey: kdsItemKey(item, index),
+            notes: item.notes || extractNoteText(item),
+          }))
+          .filter((item) => !readyItems.has(item.kdsItemKey)),
+      };
+    })
+    .filter((order) => order.items.some(isPizzaKdsItem));
 }
 
 function buildKdsReadyOrders() {
@@ -1067,6 +1133,7 @@ function buildKdsReadyOrders() {
   const readyOrders = readKdsReadyOrders();
 
   return readyOrders
+    .filter((readyOrder) => readyOrder.readyAt)
     .map((readyOrder) => {
       const order = orders.find((item) => isSameOrder(item, readyOrder));
 
@@ -1083,8 +1150,9 @@ function buildKdsReadyOrders() {
         arrivedAt: order.arrivedAt,
         readyAt: readyOrder.readyAt,
         notes: order.notes || "",
-        items: order.items.map((item) => ({
+        items: order.items.map((item, index) => ({
           ...item,
+          kdsItemKey: kdsItemKey(item, index),
           notes: item.notes || extractNoteText(item),
         })),
       };
@@ -1251,7 +1319,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -1306,6 +1374,17 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, result.ok ? 200 : 404, result);
     } catch (error) {
       sendJson(response, 400, { ok: false, message: "Pedido invalido." });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/kds-item-ready") {
+    try {
+      const body = await readBody(request);
+      const result = markKdsItemReady(body);
+      sendJson(response, result.ok ? 200 : 404, result);
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: "Produto invalido." });
     }
     return;
   }
