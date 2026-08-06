@@ -379,6 +379,7 @@ function normalizeOrder(payload) {
 
 function isDispatchEvent(payload, normalizedOrder) {
   const eventText = [
+    payload.eventType,
     payload.event,
     payload.type,
     payload.status,
@@ -395,22 +396,41 @@ function isDispatchEvent(payload, normalizedOrder) {
     "despach",
     "saiu",
     "out_for_delivery",
+    "out for delivery",
+    "ready_for_pickup",
+    "ready for pickup",
+    "pickedup",
+    "picked_up",
+    "picked up",
+    "sent",
+    "shipped",
     "delivered",
+    "delivery",
     "concluded",
+    "conclusion",
+    "finished",
+    "completed",
     "cancel",
   ].some((word) => eventText.includes(word));
 }
 
 async function handleWebhook(payload) {
   let payloadForOrder = payload;
+  const shouldRemoveFromWebhook = isDispatchEvent(payload, null);
 
-  if (payload.orderURL) {
+  if (payload.orderURL && !shouldRemoveFromWebhook) {
     payloadForOrder = await fetchCardapioOrder(payload.orderURL);
   }
 
-  const normalizedOrder = normalizeOrder(payloadForOrder);
+  const normalizedOrder = normalizeOrder(payloadForOrder) || {
+    number: String(payload.orderId || payload.orderID || payload.id || ""),
+    customer: "",
+    neighborhood: "",
+    arrivedAt: Date.now(),
+    rawStatus: "",
+  };
 
-  if (!normalizedOrder) {
+  if (!normalizedOrder.number) {
     return {
       ok: false,
       message: payload.orderURL
@@ -422,13 +442,18 @@ async function handleWebhook(payload) {
   const orders = readOrders();
   const currentIndex = orders.findIndex((order) => order.number === normalizedOrder.number);
 
-  if (isDispatchEvent({ ...payload, ...payloadForOrder }, normalizedOrder)) {
+  if (shouldRemoveFromWebhook || isDispatchEvent({ ...payload, ...payloadForOrder }, normalizedOrder)) {
     if (currentIndex >= 0) {
       orders.splice(currentIndex, 1);
       writeOrders(orders);
     }
 
-    return { ok: true, action: "removed", order: normalizedOrder.number };
+    return {
+      ok: true,
+      action: "removed",
+      order: normalizedOrder.number,
+      eventType: payload.eventType || "",
+    };
   }
 
   if (currentIndex >= 0) {
