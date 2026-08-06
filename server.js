@@ -11,8 +11,11 @@ const EVENTS_FILE = path.join(DATA_DIR, "events.json");
 const DISPATCHED_FILE = path.join(DATA_DIR, "dispatched-orders.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
-const CARDAPIO_TOKEN_URL =
-  process.env.CARDAPIO_TOKEN_URL || "";
+const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
+const CARDAPIO_ORDERS_URL =
+  process.env.CARDAPIO_ORDERS_URL ||
+  "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
+const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 60000;
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
@@ -125,6 +128,21 @@ function recordEvent(request, body, result) {
 
   writeEvents(events);
   console.log("Webhook recebido:", JSON.stringify({ result, body }, null, 2));
+}
+
+function recordSystemEvent(body, result) {
+  const events = readEvents();
+
+  events.unshift({
+    receivedAt: new Date().toLocaleString("pt-BR"),
+    method: "SYSTEM",
+    path: "/sync-open-orders",
+    result,
+    body,
+  });
+
+  writeEvents(events);
+  console.log("Sincronizacao:", JSON.stringify({ result, body }, null, 2));
 }
 
 function sendJson(response, statusCode, data) {
@@ -458,6 +476,84 @@ async function fetchCardapioOrder(orderURL, payload = {}) {
   return response.json();
 }
 
+function extractOrdersList(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  return (
+    payload.orders ||
+    payload.items ||
+    payload.data?.orders ||
+    payload.data?.items ||
+    payload.data ||
+    payload.content ||
+    []
+  );
+}
+
+function isOpenOrder(order) {
+  return !isDispatchEvent(order, normalizeOrder(order));
+}
+
+function normalizeSyncedOrders(payload, previousOrders) {
+  const previousByOrderId = new Map(previousOrders.map((order) => [String(order.orderId), order]));
+
+  return extractOrdersList(payload)
+    .map(normalizeOrder)
+    .filter(Boolean)
+    .filter(isOpenOrder)
+    .map((order) => {
+      const previous = previousByOrderId.get(String(order.orderId));
+
+      return {
+        ...order,
+        arrivedAt: previous?.arrivedAt || order.arrivedAt,
+      };
+    });
+}
+
+async function syncOpenOrders() {
+  const token = await getCardapioToken(CARDAPIO_ORDERS_URL);
+  const response = await fetch(CARDAPIO_ORDERS_URL, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao sincronizar pedidos abertos: HTTP ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const syncedOrders = normalizeSyncedOrders(payload, readOrders());
+
+  writeOrders(syncedOrders);
+
+  return {
+    ok: true,
+    action: "synced",
+    count: syncedOrders.length,
+  };
+}
+
+async function syncOpenOrdersSafely() {
+  try {
+    const result = await syncOpenOrders();
+    recordSystemEvent({ source: CARDAPIO_ORDERS_URL }, result);
+  } catch (error) {
+    recordSystemEvent(
+      { source: CARDAPIO_ORDERS_URL },
+      { ok: false, action: "sync-failed", message: error.message }
+    );
+  }
+}
+
 function normalizeOrder(payload) {
   const order =
     payload.order ||
@@ -700,7 +796,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -724,6 +820,19 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/dispatched-orders") {
     sendJson(response, 200, { orders: readDispatchedOrders() });
+    return;
+  }
+
+  if (["GET", "POST"].includes(request.method) && url.pathname === "/api/sync-open-orders") {
+    try {
+      const result = await syncOpenOrders();
+      recordSystemEvent({ source: CARDAPIO_ORDERS_URL, manual: true }, result);
+      sendJson(response, 200, result);
+    } catch (error) {
+      const result = { ok: false, action: "sync-failed", message: error.message };
+      recordSystemEvent({ source: CARDAPIO_ORDERS_URL, manual: true }, result);
+      sendJson(response, 500, result);
+    }
     return;
   }
 
@@ -754,4 +863,6 @@ const server = http.createServer(async (request, response) => {
 server.listen(PORT, HOST, () => {
   console.log(`Painel rodando em http://localhost:${PORT}`);
   console.log(`Webhook local: http://localhost:${PORT}/api/webhook/cardapio-web`);
+  setTimeout(syncOpenOrdersSafely, 5000);
+  setInterval(syncOpenOrdersSafely, SYNC_OPEN_ORDERS_INTERVAL_MS);
 });
