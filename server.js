@@ -199,6 +199,53 @@ async function getCardapioToken(orderURL) {
 }
 
 async function fetchCardapioOrder(orderURL) {
+  const directAttempts = [
+    {
+      name: "basic",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${CARDAPIO_CLIENT_ID}:${CARDAPIO_CLIENT_SECRET}`).toString(
+          "base64"
+        )}`,
+        Accept: "application/json",
+      },
+    },
+    {
+      name: "secret-bearer",
+      headers: {
+        Authorization: `Bearer ${CARDAPIO_CLIENT_SECRET}`,
+        Accept: "application/json",
+      },
+    },
+    {
+      name: "api-key",
+      headers: {
+        "X-API-Key": CARDAPIO_CLIENT_SECRET,
+        "X-Establishment-Id": CARDAPIO_CLIENT_ID,
+        Accept: "application/json",
+      },
+    },
+    {
+      name: "client-headers",
+      headers: {
+        "client-id": CARDAPIO_CLIENT_ID,
+        "client-secret": CARDAPIO_CLIENT_SECRET,
+        Accept: "application/json",
+      },
+    },
+  ];
+
+  const errors = [];
+
+  for (const attempt of directAttempts) {
+    const response = await fetch(orderURL, { headers: attempt.headers });
+
+    if (response.ok) {
+      return response.json();
+    }
+
+    errors.push(`${attempt.name}: HTTP ${response.status}`);
+  }
+
   const token = await getCardapioToken(orderURL);
   const response = await fetch(orderURL, {
     headers: {
@@ -208,7 +255,8 @@ async function fetchCardapioOrder(orderURL) {
   });
 
   if (!response.ok) {
-    throw new Error(`Falha ao buscar pedido no Cardapio Web: HTTP ${response.status}`);
+    errors.push(`oauth-bearer: HTTP ${response.status}`);
+    throw new Error(`Falha ao buscar pedido no Cardapio Web: ${errors.join(" | ")}`);
   }
 
   return response.json();
