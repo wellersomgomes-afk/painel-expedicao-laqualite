@@ -873,6 +873,21 @@ function normalizeOrder(payload) {
         order.createdDateTime
     ),
     rawStatus: String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || ""),
+    notes: String(getDeepValue(order, [
+      "notes",
+      "note",
+      "observation",
+      "observations",
+      "customerNotes",
+      "customerNote",
+      "orderNotes",
+      "orderNote",
+      "preparationNotes",
+      "preparationNote",
+      "comentario",
+      "observacao",
+      "observacoes",
+    ]) || ""),
     items: normalizeOrderItems(order),
   };
 }
@@ -970,6 +985,7 @@ function buildKdsOrders() {
       fulfillmentType: order.fulfillmentType,
       neighborhood: order.neighborhood,
       arrivedAt: order.arrivedAt,
+      notes: order.notes || "",
       items: order.items,
     }));
 }

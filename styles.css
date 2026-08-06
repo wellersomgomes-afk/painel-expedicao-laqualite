@@ -473,6 +473,30 @@ h1 {
   text-transform: uppercase;
 }
 
+.kds-order-notes {
+  display: grid;
+  gap: 6px;
+  margin: 14px 18px 0;
+  padding: 12px 14px;
+  border: 1px solid #7aa7ff;
+  border-radius: 8px;
+  background: #172235;
+}
+
+.kds-order-notes span {
+  color: #a9c7ff;
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kds-order-notes strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
 .kds-order-items {
   display: grid;
   gap: 12px;
@@ -582,6 +606,15 @@ h1 {
   font-size: 15px;
 }
 
+.kds-size-compact .kds-order-notes {
+  margin: 12px 12px 0;
+  padding: 10px;
+}
+
+.kds-size-compact .kds-order-notes strong {
+  font-size: 17px;
+}
+
 .kds-size-compact .kds-order-items {
   gap: 8px;
   padding: 12px;
@@ -632,6 +665,10 @@ h1 {
 
 .kds-size-large .kds-service {
   font-size: 22px;
+}
+
+.kds-size-large .kds-order-notes strong {
+  font-size: 26px;
 }
 
 .kds-size-large .kds-product-line strong,

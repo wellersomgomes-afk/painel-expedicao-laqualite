@@ -82,6 +82,12 @@ function renderOrder(order) {
         <div class="kds-order-time">${formatTimer(order)}</div>
       </header>
       <div class="kds-service">${service}</div>
+      ${order.notes ? `
+        <div class="kds-order-notes">
+          <span>Observacoes</span>
+          <strong>${order.notes}</strong>
+        </div>
+      ` : ""}
       <div class="kds-order-items">
         ${order.items.map(renderItem).join("")}
       </div>
