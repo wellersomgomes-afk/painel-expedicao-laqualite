@@ -403,6 +403,11 @@ function normalizeOrder(payload) {
 
   return {
     number,
+    orderId: String(getDeepValue(order, [
+      "orderId",
+      "orderID",
+      "id",
+    ]) || number),
     customer: String(getDeepValue(order, [
       "customer.name",
       "cliente.nome",
@@ -521,6 +526,7 @@ async function handleWebhook(payload) {
 
   const normalizedOrder = normalizeOrder(payloadForOrder) || {
     number: String(payload.orderId || payload.orderID || payload.id || ""),
+    orderId: String(payload.orderId || payload.orderID || payload.id || ""),
     customer: "",
     neighborhood: "",
     arrivedAt: Date.now(),
@@ -537,7 +543,12 @@ async function handleWebhook(payload) {
   }
 
   const orders = readOrders();
-  const currentIndex = orders.findIndex((order) => order.number === normalizedOrder.number);
+  const currentIndex = orders.findIndex((order) =>
+    order.number === normalizedOrder.number ||
+    order.orderId === normalizedOrder.orderId ||
+    order.orderId === String(payload.orderId || "") ||
+    order.number === String(payload.orderId || "")
+  );
 
   if (shouldRemoveFromWebhook || isDispatchEvent({ ...payload, ...payloadForOrder }, normalizedOrder)) {
     if (currentIndex >= 0) {
