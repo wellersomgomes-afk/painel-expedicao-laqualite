@@ -255,13 +255,13 @@ function renderKds() {
     return;
   }
 
-  const deliveryOrders = orders.filter((order) => !isPickupOrder(order));
-  const pickupOrders = orders.filter(isPickupOrder);
+  if (activeService === "both") {
+    grid.innerHTML = renderOrderSection("Pedidos", orders);
+    return;
+  }
 
-  grid.innerHTML = [
-    renderOrderSection("Entregas", deliveryOrders),
-    renderOrderSection("Retiradas", pickupOrders),
-  ].join("");
+  const sectionTitle = activeService === "pickup" ? "Retiradas" : "Entregas";
+  grid.innerHTML = renderOrderSection(sectionTitle, orders);
 }
 
 async function loadKdsOrders() {
