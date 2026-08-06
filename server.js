@@ -124,6 +124,43 @@ function getDeepValue(source, paths) {
   return "";
 }
 
+function findValueByKeyNames(source, keyNames) {
+  if (!source || typeof source !== "object") {
+    return "";
+  }
+
+  const normalizedKeyNames = keyNames.map((key) => key.toLowerCase());
+  const queue = [source];
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (!current || typeof current !== "object" || seen.has(current)) {
+      continue;
+    }
+
+    seen.add(current);
+
+    for (const [key, value] of Object.entries(current)) {
+      if (
+        normalizedKeyNames.includes(key.toLowerCase()) &&
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        return value;
+      }
+
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
+  }
+
+  return "";
+}
+
 function parseDateToTimestamp(value) {
   if (!value) {
     return Date.now();
@@ -302,11 +339,32 @@ function normalizeOrder(payload) {
       "delivery.address.neighborhood",
       "delivery.deliveryAddress.neighborhood",
       "delivery.delivery_address.neighborhood",
+      "deliveryAddress.district",
+      "delivery.address.district",
+      "delivery.deliveryAddress.district",
+      "deliveryAddress.neighbourhood",
+      "delivery.address.neighbourhood",
+      "delivery.deliveryAddress.neighbourhood",
       "address.neighborhood",
+      "address.district",
+      "address.neighbourhood",
       "endereco.bairro",
       "customer.address.neighborhood",
+      "customer.address.district",
       "buyer.address.neighborhood",
+      "buyer.address.district",
       "bairro",
+      "district",
+      "neighborhood",
+      "neighbourhood",
+    ]) || findValueByKeyNames(order, [
+      "bairro",
+      "neighborhood",
+      "neighbourhood",
+      "district",
+      "districtName",
+      "area",
+      "zone",
     ]) || "Bairro nao informado"),
     arrivedAt: parseDateToTimestamp(
       order.arrivedAt ||
@@ -380,7 +438,13 @@ async function handleWebhook(payload) {
   }
 
   writeOrders(orders);
-  return { ok: true, action: "saved", order: normalizedOrder.number };
+  return {
+    ok: true,
+    action: "saved",
+    order: normalizedOrder.number,
+    customer: normalizedOrder.customer,
+    neighborhood: normalizedOrder.neighborhood,
+  };
 }
 
 function serveStatic(request, response) {

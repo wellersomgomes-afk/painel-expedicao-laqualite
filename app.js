@@ -123,6 +123,7 @@ function renderEvents() {
       <article class="event-row">
         <strong>${event.receivedAt}</strong>
         <span>${event.method} ${event.path}</span>
+        <pre>${JSON.stringify(event.result, null, 2)}</pre>
         <pre>${JSON.stringify(event.body, null, 2)}</pre>
       </article>
     `)
