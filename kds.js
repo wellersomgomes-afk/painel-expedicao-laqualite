@@ -12,9 +12,11 @@ const sizeButtons = document.querySelectorAll(".kds-size-button");
 const viewTabs = document.querySelectorAll(".kds-view-tab");
 const serviceTabs = document.querySelectorAll(".kds-service-tab");
 const fullscreenButton = document.querySelector("#kds-fullscreen-button");
+const menuToggle = document.querySelector("#kds-menu-toggle");
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
 let activeService = localStorage.getItem("kdsActiveService") || "both";
+let isMenuHidden = localStorage.getItem("kdsMenuHidden") === "true";
 
 function elapsedSeconds(order) {
   return Math.max(Math.floor((Date.now() - Number(order.arrivedAt || Date.now())) / 1000), 0);
@@ -141,12 +143,6 @@ function renderOrder(order) {
         <div class="kds-order-time">${isReadyView ? `Pronto ${formatReadyTime(order)}` : formatTimer(order)}</div>
       </header>
       <div class="kds-service">${service}</div>
-      ${order.notes ? `
-        <div class="kds-order-notes">
-          <span>Observacoes</span>
-          <strong>${order.notes}</strong>
-        </div>
-      ` : ""}
       <div class="kds-order-items">
         ${order.items.map((item) => renderItem(item, order)).join("")}
       </div>
@@ -202,6 +198,14 @@ function applyActiveService() {
   serviceTabs.forEach((button) => {
     button.classList.toggle("active", button.dataset.service === activeService);
   });
+}
+
+function applyMenuVisibility() {
+  document.body.classList.toggle("kds-menu-hidden", isMenuHidden);
+
+  if (menuToggle) {
+    menuToggle.textContent = isMenuHidden ? "Mostrar menu" : "Ocultar menu";
+  }
 }
 
 function updateFullscreenButton() {
@@ -369,6 +373,14 @@ if (fullscreenButton) {
   document.addEventListener("fullscreenchange", updateFullscreenButton);
 }
 
+if (menuToggle) {
+  menuToggle.addEventListener("click", () => {
+    isMenuHidden = !isMenuHidden;
+    localStorage.setItem("kdsMenuHidden", String(isMenuHidden));
+    applyMenuVisibility();
+  });
+}
+
 grid.addEventListener("click", (event) => {
   const itemButton = event.target.closest(".kds-item-ready-button");
   const orderButton = event.target.closest(".kds-ready-button");
@@ -386,6 +398,7 @@ grid.addEventListener("click", (event) => {
 applyCardSize();
 applyActiveView();
 applyActiveService();
+applyMenuVisibility();
 updateFullscreenButton();
 loadKdsOrders();
 setInterval(loadKdsOrders, 5000);

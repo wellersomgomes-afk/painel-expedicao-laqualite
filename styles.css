@@ -365,6 +365,23 @@ h1 {
   width: min(1700px, 100%);
 }
 
+.kds-menu-toggle {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #465061;
+  border-radius: 8px;
+  background: #26313e;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
 .kds-screen .topbar {
   align-items: end;
   margin-bottom: 14px;
@@ -487,6 +504,25 @@ h1 {
 .kds-grid {
   display: grid;
   gap: 14px;
+}
+
+.kds-menu-hidden .kds-screen {
+  padding-top: 50px;
+}
+
+.kds-menu-hidden .kds-screen .topbar,
+.kds-menu-hidden .kds-screen .summary,
+.kds-menu-hidden .kds-view-tabs,
+.kds-menu-hidden .kds-service-tabs {
+  display: none;
+}
+
+.kds-menu-hidden .kds-section {
+  gap: 0;
+}
+
+.kds-menu-hidden .kds-section-head {
+  display: none;
 }
 
 .kds-section {
