@@ -8,6 +8,13 @@ const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
 const EVENTS_FILE = path.join(DATA_DIR, "events.json");
+const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
+const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
+const CARDAPIO_TOKEN_URL =
+  process.env.CARDAPIO_TOKEN_URL || "https://integracao.cardapioweb.com/api/open_delivery/v1/oauth/token";
+
+let cachedToken = null;
+let cachedTokenExpiresAt = 0;
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -117,15 +124,87 @@ function getDeepValue(source, paths) {
   return "";
 }
 
+function parseDateToTimestamp(value) {
+  if (!value) {
+    return Date.now();
+  }
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+async function getCardapioToken() {
+  if (!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) {
+    throw new Error("Credenciais do Cardapio Web nao configuradas no Render.");
+  }
+
+  if (cachedToken && Date.now() < cachedTokenExpiresAt) {
+    return cachedToken;
+  }
+
+  const response = await fetch(CARDAPIO_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: CARDAPIO_CLIENT_ID,
+      client_secret: CARDAPIO_CLIENT_SECRET,
+      grant_type: "client_credentials",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao autenticar no Cardapio Web: HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  cachedToken = data.access_token;
+  cachedTokenExpiresAt = Date.now() + Math.max(Number(data.expires_in || 3600) - 60, 60) * 1000;
+
+  if (!cachedToken) {
+    throw new Error("Cardapio Web nao retornou access_token.");
+  }
+
+  return cachedToken;
+}
+
+async function fetchCardapioOrder(orderURL) {
+  const token = await getCardapioToken();
+  const response = await fetch(orderURL, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao buscar pedido no Cardapio Web: HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
 function normalizeOrder(payload) {
-  const order = payload.order || payload.pedido || payload.data?.order || payload.data?.pedido || payload;
+  const order =
+    payload.order ||
+    payload.pedido ||
+    payload.data?.order ||
+    payload.data?.pedido ||
+    payload.data ||
+    payload;
   const number = String(getDeepValue(order, [
     "displayId",
+    "displayID",
     "display_id",
     "number",
     "numero",
     "code",
     "codigo",
+    "orderId",
+    "orderID",
     "id",
   ]));
 
@@ -140,15 +219,27 @@ function normalizeOrder(payload) {
       "cliente.nome",
       "customerName",
       "nomeCliente",
+      "buyer.name",
+      "consumer.name",
     ]) || "Cliente"),
     neighborhood: String(getDeepValue(order, [
       "deliveryAddress.neighborhood",
       "delivery.address.neighborhood",
+      "delivery.deliveryAddress.neighborhood",
+      "delivery.delivery_address.neighborhood",
       "address.neighborhood",
       "endereco.bairro",
+      "customer.address.neighborhood",
+      "buyer.address.neighborhood",
       "bairro",
     ]) || "Bairro nao informado"),
-    arrivedAt: Number(order.arrivedAt || order.createdAtTimestamp) || Date.now(),
+    arrivedAt: parseDateToTimestamp(
+      order.arrivedAt ||
+        order.createdAt ||
+        order.created_at ||
+        order.createdAtTimestamp ||
+        order.createdDateTime
+    ),
     rawStatus: String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || ""),
   };
 }
@@ -177,17 +268,28 @@ function isDispatchEvent(payload, normalizedOrder) {
   ].some((word) => eventText.includes(word));
 }
 
-function handleWebhook(payload) {
-  const normalizedOrder = normalizeOrder(payload);
+async function handleWebhook(payload) {
+  let payloadForOrder = payload;
+
+  if (payload.orderURL) {
+    payloadForOrder = await fetchCardapioOrder(payload.orderURL);
+  }
+
+  const normalizedOrder = normalizeOrder(payloadForOrder);
 
   if (!normalizedOrder) {
-    return { ok: false, message: "Pedido nao identificado no webhook." };
+    return {
+      ok: false,
+      message: payload.orderURL
+        ? "Pedido nao identificado depois de consultar orderURL."
+        : "Pedido nao identificado no webhook.",
+    };
   }
 
   const orders = readOrders();
   const currentIndex = orders.findIndex((order) => order.number === normalizedOrder.number);
 
-  if (isDispatchEvent(payload, normalizedOrder)) {
+  if (isDispatchEvent({ ...payload, ...payloadForOrder }, normalizedOrder)) {
     if (currentIndex >= 0) {
       orders.splice(currentIndex, 1);
       writeOrders(orders);
@@ -236,7 +338,9 @@ const server = http.createServer(async (request, response) => {
 
   if (
     !["/api/orders", "/api/events"].includes(url.pathname) &&
-    !["/", "/index.html", "/app.js", "/styles.css", "/favicon.ico"].includes(url.pathname)
+    !["/", "/index.html", "/app.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
+      url.pathname
+    )
   ) {
     recordEvent(request, { note: "Chamada recebida fora das rotas principais." }, {
       ok: true,
@@ -265,7 +369,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && url.pathname === "/api/webhook/cardapio-web") {
     try {
       const body = await readBody(request);
-      const result = handleWebhook(body);
+      const result = await handleWebhook(body);
       recordEvent(request, body, result);
       sendJson(response, result.ok ? 200 : 400, result);
     } catch (error) {
