@@ -92,11 +92,13 @@ function renderItemNote(note) {
 function renderItem(item) {
   const complements = item.complements || [];
   const hasBorderHighlight = isBorderText(item.name) || complements.some((complement) => isBorderText(complement.name));
+  const quantity = Number(item.quantity || 0);
+  const quantityClass = quantity >= 2 ? " kds-quantity-alert" : "";
 
   return `
     <article class="kds-order-item${hasBorderHighlight ? " has-border" : ""}">
       <div class="kds-product-line">
-        <strong>${formatQuantity(item.quantity)}x</strong>
+        <strong class="kds-quantity${quantityClass}">${formatQuantity(item.quantity)}x</strong>
         <span>${item.name}</span>
       </div>
       ${complements.length > 0 ? `

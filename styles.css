@@ -609,6 +609,19 @@ h1 {
   line-height: 1;
 }
 
+.kds-quantity {
+  width: fit-content;
+  min-width: 44px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.kds-quantity-alert {
+  border: 2px solid #ffcf5a;
+  background: #ffcf5a;
+  color: #101318;
+}
+
 .kds-complements {
   display: grid;
   gap: 6px;
