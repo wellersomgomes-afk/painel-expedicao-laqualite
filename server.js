@@ -351,9 +351,71 @@ function normalizeOrderItems(order) {
           "produto.categoria.nome",
         ]) || ""),
         notes: String(getDeepValue(item, ["notes", "observation", "observations", "comentario"]) || ""),
+        complements: normalizeComplements(item),
       };
     })
     .filter(Boolean);
+}
+
+function normalizeComplements(item) {
+  const complementGroups = firstArray(item, [
+    "options",
+    "complements",
+    "complementos",
+    "choices",
+    "garnishItems",
+    "subItems",
+    "modifiers",
+  ]);
+  const complements = [];
+
+  for (const complement of complementGroups) {
+    const nestedItems = firstArray(complement, [
+      "items",
+      "options",
+      "choices",
+      "complements",
+      "complementos",
+      "garnishItems",
+    ]);
+
+    if (nestedItems.length > 0) {
+      nestedItems.forEach((nestedItem) => {
+        const name = String(getDeepValue(nestedItem, [
+          "name",
+          "description",
+          "title",
+          "product.name",
+          "item.name",
+        ]) || "");
+
+        if (name) {
+          complements.push({
+            name,
+            quantity: toNumber(getDeepValue(nestedItem, ["quantity", "qty", "amount", "count"]), 1),
+          });
+        }
+      });
+      continue;
+    }
+
+    const name = String(getDeepValue(complement, [
+      "name",
+      "description",
+      "title",
+      "product.name",
+      "item.name",
+    ]) || "");
+
+    if (name) {
+      complements.push({
+        name,
+        quantity: toNumber(getDeepValue(complement, ["quantity", "qty", "amount", "count"]), 1),
+      });
+    }
+  }
+
+  return complements;
 }
 
 function detectFulfillmentType(order) {
@@ -846,6 +908,20 @@ function buildProductionSummary() {
   };
 }
 
+function buildKdsOrders() {
+  return readOrders()
+    .filter((order) => Array.isArray(order.items) && order.items.length > 0)
+    .sort((a, b) => a.arrivedAt - b.arrivedAt)
+    .map((order) => ({
+      number: order.number,
+      customer: order.customer,
+      fulfillmentType: order.fulfillmentType,
+      neighborhood: order.neighborhood,
+      arrivedAt: order.arrivedAt,
+      items: order.items,
+    }));
+}
+
 function isDispatchEvent(payload, normalizedOrder) {
   const eventType = String(payload.eventType || "").toUpperCase();
   const activeEventTypes = new Set(["CREATED", "CONFIRMED", "ACCEPTED", "PREPARING", "READY"]);
@@ -1004,7 +1080,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -1033,6 +1109,14 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/production-summary") {
     sendJson(response, 200, buildProductionSummary());
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/kds-orders") {
+    sendJson(response, 200, {
+      updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      orders: buildKdsOrders(),
+    });
     return;
   }
 
