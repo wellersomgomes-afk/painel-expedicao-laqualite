@@ -235,8 +235,14 @@ async function getCardapioToken(orderURL) {
   return cachedToken;
 }
 
-async function fetchCardapioOrder(orderURL) {
+async function fetchCardapioOrder(orderURL, payload = {}) {
   const directAttempts = [
+    {
+      name: "no-auth",
+      headers: {
+        Accept: "application/json",
+      },
+    },
     {
       name: "basic",
       headers: {
@@ -247,9 +253,27 @@ async function fetchCardapioOrder(orderURL) {
       },
     },
     {
+      name: "basic-source-app",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${CARDAPIO_CLIENT_ID}:${CARDAPIO_CLIENT_SECRET}`).toString(
+          "base64"
+        )}`,
+        "X-Source-App-Id": payload.sourceAppId || "",
+        Accept: "application/json",
+      },
+    },
+    {
       name: "secret-bearer",
       headers: {
         Authorization: `Bearer ${CARDAPIO_CLIENT_SECRET}`,
+        Accept: "application/json",
+      },
+    },
+    {
+      name: "secret-bearer-source-app",
+      headers: {
+        Authorization: `Bearer ${CARDAPIO_CLIENT_SECRET}`,
+        "X-Source-App-Id": payload.sourceAppId || "",
         Accept: "application/json",
       },
     },
@@ -262,10 +286,28 @@ async function fetchCardapioOrder(orderURL) {
       },
     },
     {
+      name: "api-key-source-app",
+      headers: {
+        "X-API-Key": CARDAPIO_CLIENT_SECRET,
+        "X-Establishment-Id": CARDAPIO_CLIENT_ID,
+        "X-Source-App-Id": payload.sourceAppId || "",
+        Accept: "application/json",
+      },
+    },
+    {
       name: "client-headers",
       headers: {
         "client-id": CARDAPIO_CLIENT_ID,
         "client-secret": CARDAPIO_CLIENT_SECRET,
+        Accept: "application/json",
+      },
+    },
+    {
+      name: "integration-headers",
+      headers: {
+        "integration-id": CARDAPIO_CLIENT_ID,
+        "integration-secret": CARDAPIO_CLIENT_SECRET,
+        "source-app-id": payload.sourceAppId || "",
         Accept: "application/json",
       },
     },
@@ -283,7 +325,15 @@ async function fetchCardapioOrder(orderURL) {
     errors.push(`${attempt.name}: HTTP ${response.status}`);
   }
 
-  const token = await getCardapioToken(orderURL);
+  let token = "";
+
+  try {
+    token = await getCardapioToken(orderURL);
+  } catch (error) {
+    errors.push(`oauth-token: ${error.message}`);
+    throw new Error(`Falha ao buscar pedido no Cardapio Web: ${errors.join(" | ")}`);
+  }
+
   const response = await fetch(orderURL, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -439,7 +489,7 @@ async function handleWebhook(payload) {
   const shouldRemoveFromWebhook = isDispatchEvent(payload, null);
 
   if (payload.orderURL && !shouldRemoveFromWebhook) {
-    payloadForOrder = await fetchCardapioOrder(payload.orderURL);
+    payloadForOrder = await fetchCardapioOrder(payload.orderURL, payload);
   }
 
   const normalizedOrder = normalizeOrder(payloadForOrder) || {
