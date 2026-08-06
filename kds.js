@@ -10,8 +10,10 @@ const updatedAt = document.querySelector("#kds-updated-at");
 const grid = document.querySelector("#kds-grid");
 const sizeButtons = document.querySelectorAll(".kds-size-button");
 const viewTabs = document.querySelectorAll(".kds-view-tab");
+const areaButtons = document.querySelectorAll(".kds-area-button");
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
+let selectedAreas = JSON.parse(localStorage.getItem("kdsSelectedAreas") || '["cozinha","esfihas","porcoes"]');
 
 function elapsedSeconds(order) {
   return Math.max(Math.floor((Date.now() - Number(order.arrivedAt || Date.now())) / 1000), 0);
@@ -51,6 +53,30 @@ function normalizeText(value) {
 
 function isBorderText(value) {
   return normalizeText(value).includes("borda");
+}
+
+function areaForItem(item) {
+  const text = normalizeText(`${item.category || ""} ${item.name || ""}`);
+
+  if (text.includes("esfiha") || text.includes("esfirra")) {
+    return "esfihas";
+  }
+
+  if (text.includes("porcao") || text.includes("porcoes")) {
+    return "porcoes";
+  }
+
+  return "cozinha";
+}
+
+function filterOrderByArea(order) {
+  const items = (order.items || []).filter((item) => selectedAreas.includes(areaForItem(item)));
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return { ...order, items };
 }
 
 function renderComplement(complement) {
@@ -142,13 +168,26 @@ function applyActiveView() {
   });
 }
 
+function applySelectedAreas() {
+  if (!Array.isArray(selectedAreas) || selectedAreas.length === 0) {
+    selectedAreas = ["cozinha", "esfihas", "porcoes"];
+  }
+
+  areaButtons.forEach((button) => {
+    button.classList.toggle("active", selectedAreas.includes(button.dataset.area));
+  });
+}
+
 function currentOrders() {
-  return activeView === "ready" ? board.readyOrders : board.productionOrders;
+  const sourceOrders = activeView === "ready" ? board.readyOrders : board.productionOrders;
+
+  return sourceOrders.map(filterOrderByArea).filter(Boolean);
 }
 
 function renderKds() {
   applyCardSize();
   applyActiveView();
+  applySelectedAreas();
   const orders = currentOrders();
 
   countLabel.textContent = activeView === "ready" ? "Pedidos prontos" : "Pedidos em preparo";
@@ -231,6 +270,25 @@ viewTabs.forEach((button) => {
   });
 });
 
+areaButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const area = button.dataset.area;
+
+    if (selectedAreas.includes(area)) {
+      selectedAreas = selectedAreas.filter((item) => item !== area);
+    } else {
+      selectedAreas = [...selectedAreas, area];
+    }
+
+    if (selectedAreas.length === 0) {
+      selectedAreas = [area];
+    }
+
+    localStorage.setItem("kdsSelectedAreas", JSON.stringify(selectedAreas));
+    renderKds();
+  });
+});
+
 grid.addEventListener("click", (event) => {
   const button = event.target.closest(".kds-ready-button");
 
@@ -241,6 +299,7 @@ grid.addEventListener("click", (event) => {
 
 applyCardSize();
 applyActiveView();
+applySelectedAreas();
 loadKdsOrders();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);

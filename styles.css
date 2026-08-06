@@ -424,6 +424,54 @@ h1 {
   color: #101318;
 }
 
+.kds-area-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.kds-area-panel span {
+  color: var(--muted);
+  font-size: 20px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kds-area-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.kds-area-button {
+  min-height: 52px;
+  min-width: 135px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.kds-area-button.active {
+  border-color: #61a8ff;
+  background: #173252;
+  color: #d8e9ff;
+}
+
+.kds-area-button.active::before {
+  content: "✓";
+  margin-right: 8px;
+}
+
 .kds-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -772,7 +820,9 @@ h1 {
 
   .kds-actions,
   .kds-size-control,
-  .kds-view-tabs {
+  .kds-view-tabs,
+  .kds-area-panel,
+  .kds-area-buttons {
     display: grid;
     grid-template-columns: 1fr;
   }
