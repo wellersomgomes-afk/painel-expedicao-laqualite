@@ -79,7 +79,7 @@ function renderOrders() {
   const activeOrders = [...orders].sort((a, b) => elapsedSeconds(b) - elapsedSeconds(a));
   const deliveryOrders = activeOrders.filter(isDelivery);
   const pickupOrders = activeOrders.filter(isPickup);
-  const lateOrders = deliveryOrders.filter(isLate);
+  const lateOrders = activeOrders.filter(isLate);
   const visibleOrders =
     activeFilter === "late"
       ? lateOrders
