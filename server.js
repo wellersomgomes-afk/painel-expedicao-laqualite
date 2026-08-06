@@ -50,7 +50,7 @@ function ensureDataFile() {
 
 function readOrders() {
   ensureDataFile();
-  const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, "utf8"));
+  const orders = readJsonFile(ORDERS_FILE);
   const realOrders = orders
     .filter((order) =>
       !demoOrderNumbers.has(String(order.number)) &&
@@ -83,7 +83,7 @@ function writeOrders(orders) {
 
 function readEvents() {
   ensureDataFile();
-  return JSON.parse(fs.readFileSync(EVENTS_FILE, "utf8"));
+  return readJsonFile(EVENTS_FILE);
 }
 
 function writeEvents(events) {
@@ -93,7 +93,7 @@ function writeEvents(events) {
 
 function readDispatchedOrders() {
   ensureDataFile();
-  return JSON.parse(fs.readFileSync(DISPATCHED_FILE, "utf8"));
+  return readJsonFile(DISPATCHED_FILE);
 }
 
 function writeDispatchedOrders(orders) {
@@ -122,6 +122,10 @@ function recordDispatchedOrder(order, payload) {
 
   withoutDuplicate.unshift(dispatchedOrder);
   writeDispatchedOrders(withoutDuplicate);
+}
+
+function readJsonFile(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
 }
 
 function recordEvent(request, body, result) {
@@ -242,6 +246,114 @@ function parseDateToTimestamp(value) {
 
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function toNumber(value, fallback = 1) {
+  const normalized = Number(String(value ?? "").replace(",", "."));
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
+}
+
+function firstArray(source, paths) {
+  for (const currentPath of paths) {
+    const value = currentPath.split(".").reduce((current, key) => current?.[key], source);
+
+    if (Array.isArray(value) && value.length > 0) {
+      return value;
+    }
+  }
+
+  return [];
+}
+
+function findItemArray(source) {
+  const directItems = firstArray(source, [
+    "items",
+    "orderItems",
+    "products",
+    "cart.items",
+    "bag.items",
+    "data.items",
+    "data.order.items",
+    "pedido.items",
+    "pedido.itens",
+    "itens",
+  ]);
+
+  if (directItems.length > 0) {
+    return directItems;
+  }
+
+  const queue = [source];
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (!current || typeof current !== "object" || seen.has(current)) {
+      continue;
+    }
+
+    seen.add(current);
+
+    for (const value of Object.values(current)) {
+      if (Array.isArray(value) && value.some((item) =>
+        item && typeof item === "object" && (
+          getDeepValue(item, ["name", "product.name", "item.name", "description", "title"]) ||
+          getDeepValue(item, ["quantity", "qty", "amount", "count"])
+        )
+      )) {
+        return value;
+      }
+
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
+  }
+
+  return [];
+}
+
+function normalizeOrderItems(order) {
+  return findItemArray(order)
+    .map((item) => {
+      const name = String(getDeepValue(item, [
+        "name",
+        "product.name",
+        "item.name",
+        "description",
+        "title",
+        "produto.nome",
+      ]) || "");
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        name,
+        quantity: toNumber(getDeepValue(item, [
+          "quantity",
+          "qty",
+          "amount",
+          "count",
+          "quantidade",
+        ])),
+        category: String(getDeepValue(item, [
+          "category.name",
+          "category",
+          "categoryName",
+          "group.name",
+          "group",
+          "product.category.name",
+          "product.category",
+          "product.categoryName",
+          "produto.categoria.nome",
+        ]) || ""),
+        notes: String(getDeepValue(item, ["notes", "observation", "observations", "comentario"]) || ""),
+      };
+    })
+    .filter(Boolean);
 }
 
 function detectFulfillmentType(order) {
@@ -522,6 +634,7 @@ function normalizeSyncedOrders(payload, previousOrders) {
       return {
         ...order,
         arrivedAt: previous?.arrivedAt || order.arrivedAt,
+        items: order.items?.length ? order.items : previous?.items || [],
       };
     });
 }
@@ -650,6 +763,86 @@ function normalizeOrder(payload) {
         order.createdDateTime
     ),
     rawStatus: String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || ""),
+    items: normalizeOrderItems(order),
+  };
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function classifyProductionItem(item) {
+  const text = normalizeText(`${item.category} ${item.name}`);
+  const isCombo = text.includes("combo");
+
+  if (text.includes("pizza")) {
+    return { key: "pizzas", label: "Pizzas", isCombo };
+  }
+
+  if (text.includes("esfiha") || text.includes("esfirra")) {
+    return { key: "esfihas", label: "Esfihas", isCombo };
+  }
+
+  if (text.includes("porcao") || text.includes("porcoes") || text.includes("porção") || text.includes("porções")) {
+    return { key: "porcoes", label: "Porções", isCombo };
+  }
+
+  if (isCombo) {
+    return { key: "combos", label: "Combos", isCombo: true };
+  }
+
+  return { key: "outros", label: "Outros", isCombo: false };
+}
+
+function buildProductionSummary() {
+  const groups = new Map();
+  const orders = readOrders();
+
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const classification = classifyProductionItem(item);
+      const existing = groups.get(classification.key) || {
+        key: classification.key,
+        label: classification.label,
+        units: 0,
+        combos: 0,
+        commands: new Set(),
+        items: new Map(),
+      };
+      const quantity = toNumber(item.quantity);
+      const itemKey = item.name;
+      const currentItem = existing.items.get(itemKey) || { name: item.name, quantity: 0 };
+
+      if (classification.isCombo) {
+        existing.combos += quantity;
+      } else {
+        existing.units += quantity;
+      }
+
+      existing.commands.add(order.number);
+      currentItem.quantity += quantity;
+      existing.items.set(itemKey, currentItem);
+      groups.set(classification.key, existing);
+    }
+  }
+
+  return {
+    updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    orderCount: orders.length,
+    groups: ["pizzas", "esfihas", "porcoes", "combos", "outros"]
+      .map((key) => groups.get(key))
+      .filter(Boolean)
+      .map((group) => ({
+        key: group.key,
+        label: group.label,
+        units: group.units,
+        combos: group.combos,
+        commands: group.commands.size,
+        items: [...group.items.values()].sort((a, b) => b.quantity - a.quantity),
+      })),
   };
 }
 
@@ -779,7 +972,12 @@ async function handleWebhook(payload) {
 
 function serveStatic(request, response) {
   const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
-  const safePath = requestPath === "/" ? "/index.html" : requestPath;
+  const routeAliases = {
+    "/": "/index.html",
+    "/kds": "/kds.html",
+    "/producao": "/kds.html",
+  };
+  const safePath = routeAliases[requestPath] || requestPath;
   const filePath = path.normalize(path.join(ROOT, safePath));
 
   if (!filePath.startsWith(ROOT)) {
@@ -806,8 +1004,8 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders"].includes(url.pathname) &&
-    !["/", "/index.html", "/app.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary"].includes(url.pathname) &&
+    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
   ) {
@@ -830,6 +1028,11 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/dispatched-orders") {
     sendJson(response, 200, { orders: readDispatchedOrders() });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/production-summary") {
+    sendJson(response, 200, buildProductionSummary());
     return;
   }
 

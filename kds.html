@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KDS de Produção Lá Qualité Delivery</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="screen kds-screen">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Lá Qualité Delivery</p>
+          <h1>KDS Produção</h1>
+        </div>
+
+        <a class="panel-link" href="/">Expedição</a>
+      </header>
+
+      <section class="summary" aria-label="Resumo da produção">
+        <div class="summary-item">
+          <span>Pedidos em aberto</span>
+          <strong id="kds-order-count">0</strong>
+        </div>
+        <div class="summary-item">
+          <span>Atualizado</span>
+          <strong id="kds-updated-at">--:--</strong>
+        </div>
+      </section>
+
+      <section class="kds-grid" id="kds-grid" aria-label="Produtos em produção"></section>
+    </main>
+
+    <script src="./kds.js"></script>
+  </body>
+</html>
