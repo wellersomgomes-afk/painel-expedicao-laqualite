@@ -1,13 +1,17 @@
-let summary = {
+let board = {
   updatedAt: "--:--",
-  orders: [],
+  productionOrders: [],
+  readyOrders: [],
 };
 
 const orderCount = document.querySelector("#kds-order-count");
+const countLabel = document.querySelector("#kds-count-label");
 const updatedAt = document.querySelector("#kds-updated-at");
 const grid = document.querySelector("#kds-grid");
 const sizeButtons = document.querySelectorAll(".kds-size-button");
+const viewTabs = document.querySelectorAll(".kds-view-tab");
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
+let activeView = localStorage.getItem("kdsActiveView") || "production";
 
 function elapsedSeconds(order) {
   return Math.max(Math.floor((Date.now() - Number(order.arrivedAt || Date.now())) / 1000), 0);
@@ -24,6 +28,17 @@ function formatTimer(order) {
 function formatQuantity(value) {
   return Number(value || 0).toLocaleString("pt-BR", {
     maximumFractionDigits: 2,
+  });
+}
+
+function formatReadyTime(order) {
+  if (!order.readyAt) {
+    return "";
+  }
+
+  return new Date(Number(order.readyAt)).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -80,15 +95,16 @@ function renderItem(item) {
 
 function renderOrder(order) {
   const service = order.fulfillmentType === "pickup" ? "Retirada" : order.neighborhood || "Entrega";
+  const isReadyView = activeView === "ready";
 
   return `
-    <article class="kds-order-card" data-number="${order.number}" data-order-id="${order.orderId || ""}">
+    <article class="kds-order-card${isReadyView ? " is-ready" : ""}" data-number="${order.number}" data-order-id="${order.orderId || ""}">
       <header class="kds-order-head">
         <div>
           <strong>#${order.number}</strong>
           <span>${order.customer || "Cliente"}</span>
         </div>
-        <div class="kds-order-time">${formatTimer(order)}</div>
+        <div class="kds-order-time">${isReadyView ? `Pronto ${formatReadyTime(order)}` : formatTimer(order)}</div>
       </header>
       <div class="kds-service">${service}</div>
       ${order.notes ? `
@@ -100,9 +116,13 @@ function renderOrder(order) {
       <div class="kds-order-items">
         ${order.items.map(renderItem).join("")}
       </div>
-      <button class="kds-ready-button" type="button" data-number="${order.number}" data-order-id="${order.orderId || ""}">
-        Pronto
-      </button>
+      ${isReadyView ? `
+        <div class="kds-ready-stamp">Pedido pronto</div>
+      ` : `
+        <button class="kds-ready-button" type="button" data-number="${order.number}" data-order-id="${order.orderId || ""}">
+          Pronto
+        </button>
+      `}
     </article>
   `;
 }
@@ -116,27 +136,54 @@ function applyCardSize() {
   });
 }
 
+function applyActiveView() {
+  viewTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === activeView);
+  });
+}
+
+function currentOrders() {
+  return activeView === "ready" ? board.readyOrders : board.productionOrders;
+}
+
 function renderKds() {
   applyCardSize();
-  orderCount.textContent = String(summary.orders?.length || 0);
-  updatedAt.textContent = summary.updatedAt || "--:--";
+  applyActiveView();
+  const orders = currentOrders();
 
-  if (!summary.orders || summary.orders.length === 0) {
-    grid.innerHTML = '<div class="empty kds-empty">Nenhum pedido em producao no momento.</div>';
+  countLabel.textContent = activeView === "ready" ? "Pedidos prontos" : "Pedidos em preparo";
+  orderCount.textContent = String(orders.length);
+  updatedAt.textContent = board.updatedAt || "--:--";
+
+  if (orders.length === 0) {
+    grid.innerHTML = activeView === "ready"
+      ? '<div class="empty kds-empty">Nenhum pedido pronto no momento.</div>'
+      : '<div class="empty kds-empty">Nenhum pedido em producao no momento.</div>';
     return;
   }
 
-  grid.innerHTML = summary.orders.map(renderOrder).join("");
+  grid.innerHTML = orders.map(renderOrder).join("");
 }
 
 async function loadKdsOrders() {
   try {
-    const response = await fetch("/api/kds-orders");
-    summary = await response.json();
+    const [productionResponse, readyResponse] = await Promise.all([
+      fetch("/api/kds-orders"),
+      fetch("/api/kds-ready-orders"),
+    ]);
+    const productionData = await productionResponse.json();
+    const readyData = await readyResponse.json();
+
+    board = {
+      updatedAt: productionData.updatedAt || readyData.updatedAt || "--:--",
+      productionOrders: Array.isArray(productionData.orders) ? productionData.orders : [],
+      readyOrders: Array.isArray(readyData.orders) ? readyData.orders : [],
+    };
   } catch (error) {
-    summary = {
+    board = {
       updatedAt: "--:--",
-      orders: [],
+      productionOrders: [],
+      readyOrders: [],
     };
   }
 
@@ -161,12 +208,7 @@ async function markOrderReady(button) {
       throw new Error("Falha ao marcar pronto");
     }
 
-    summary.orders = summary.orders.filter((order) =>
-      String(order.number) !== String(button.dataset.number) &&
-      String(order.orderId || "") !== String(button.dataset.orderId || "")
-    );
-    renderKds();
-    loadKdsOrders();
+    await loadKdsOrders();
   } catch (error) {
     button.disabled = false;
     button.textContent = "Pronto";
@@ -181,6 +223,14 @@ sizeButtons.forEach((button) => {
   });
 });
 
+viewTabs.forEach((button) => {
+  button.addEventListener("click", () => {
+    activeView = button.dataset.view;
+    localStorage.setItem("kdsActiveView", activeView);
+    renderKds();
+  });
+});
+
 grid.addEventListener("click", (event) => {
   const button = event.target.closest(".kds-ready-button");
 
@@ -190,6 +240,7 @@ grid.addEventListener("click", (event) => {
 });
 
 applyCardSize();
+applyActiveView();
 loadKdsOrders();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);

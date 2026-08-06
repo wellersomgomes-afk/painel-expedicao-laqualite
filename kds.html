@@ -26,7 +26,7 @@
 
       <section class="summary" aria-label="Resumo da producao">
         <div class="summary-item">
-          <span>Pedidos em aberto</span>
+          <span id="kds-count-label">Pedidos em preparo</span>
           <strong id="kds-order-count">0</strong>
         </div>
         <div class="summary-item">
@@ -34,6 +34,11 @@
           <strong id="kds-updated-at">--:--</strong>
         </div>
       </section>
+
+      <nav class="kds-view-tabs" aria-label="Status do KDS">
+        <button class="kds-view-tab active" type="button" data-view="production">Em preparo</button>
+        <button class="kds-view-tab" type="button" data-view="ready">Pedidos Prontos</button>
+      </nav>
 
       <section class="kds-grid" id="kds-grid" aria-label="Produtos em producao"></section>
     </main>

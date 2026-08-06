@@ -1062,6 +1062,37 @@ function buildKdsOrders() {
     }));
 }
 
+function buildKdsReadyOrders() {
+  const orders = readOrders();
+  const readyOrders = readKdsReadyOrders();
+
+  return readyOrders
+    .map((readyOrder) => {
+      const order = orders.find((item) => isSameOrder(item, readyOrder));
+
+      if (!order || !Array.isArray(order.items) || order.items.length === 0) {
+        return null;
+      }
+
+      return {
+        number: order.number,
+        orderId: order.orderId,
+        customer: order.customer,
+        fulfillmentType: order.fulfillmentType,
+        neighborhood: order.neighborhood,
+        arrivedAt: order.arrivedAt,
+        readyAt: readyOrder.readyAt,
+        notes: order.notes || "",
+        items: order.items.map((item) => ({
+          ...item,
+          notes: item.notes || extractNoteText(item),
+        })),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.readyAt - a.readyAt);
+}
+
 function isDispatchEvent(payload, normalizedOrder) {
   const eventType = String(payload.eventType || "").toUpperCase();
   const activeEventTypes = new Set(["CREATED", "CONFIRMED", "ACCEPTED", "PREPARING", "READY"]);
@@ -1220,7 +1251,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -1256,6 +1287,14 @@ const server = http.createServer(async (request, response) => {
     sendJson(response, 200, {
       updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       orders: buildKdsOrders(),
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/kds-ready-orders") {
+    sendJson(response, 200, {
+      updatedAt: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      orders: buildKdsReadyOrders(),
     });
     return;
   }
