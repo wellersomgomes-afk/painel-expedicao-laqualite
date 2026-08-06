@@ -245,6 +245,15 @@ h1 {
   gap: 18px;
 }
 
+.dispatched-head,
+.dispatched-row {
+  grid-template-columns:
+    minmax(120px, 0.75fr)
+    minmax(190px, 1fr)
+    minmax(220px, 1.2fr)
+    minmax(220px, 1fr);
+}
+
 .orders-head {
   min-height: 56px;
   padding: 0 24px;

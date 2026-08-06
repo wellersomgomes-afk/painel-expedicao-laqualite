@@ -8,6 +8,7 @@ const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
 const EVENTS_FILE = path.join(DATA_DIR, "events.json");
+const DISPATCHED_FILE = path.join(DATA_DIR, "dispatched-orders.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL =
@@ -23,17 +24,8 @@ const contentTypes = {
   ".json": "application/json; charset=utf-8",
 };
 
-const initialOrders = [
-  { number: "1048", customer: "Mariana", neighborhood: "Centro", arrivedMinutesAgo: 7 },
-  { number: "1049", customer: "Rafael", neighborhood: "Jardim Europa", arrivedMinutesAgo: 14 },
-  { number: "1050", customer: "Camila", neighborhood: "Vila Nova", arrivedMinutesAgo: 22 },
-  { number: "1051", customer: "Fernando", neighborhood: "Santa Luzia", arrivedMinutesAgo: 31 },
-  { number: "1052", customer: "Patricia", neighborhood: "Bela Vista", arrivedMinutesAgo: 38 },
-  { number: "1053", customer: "Lucas", neighborhood: "Sao Jose", arrivedMinutesAgo: 45 },
-].map((order) => ({
-  ...order,
-  arrivedAt: Date.now() - order.arrivedMinutesAgo * 60 * 1000,
-}));
+const initialOrders = [];
+const demoOrderNumbers = new Set(["1048", "1049", "1050", "1051", "1052", "1053"]);
 
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -47,11 +39,26 @@ function ensureDataFile() {
   if (!fs.existsSync(EVENTS_FILE)) {
     fs.writeFileSync(EVENTS_FILE, JSON.stringify([], null, 2));
   }
+
+  if (!fs.existsSync(DISPATCHED_FILE)) {
+    fs.writeFileSync(DISPATCHED_FILE, JSON.stringify([], null, 2));
+  }
 }
 
 function readOrders() {
   ensureDataFile();
-  return JSON.parse(fs.readFileSync(ORDERS_FILE, "utf8"));
+  const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, "utf8"));
+  const realOrders = orders.filter((order) =>
+    !demoOrderNumbers.has(String(order.number)) &&
+    order.orderId &&
+    order.orderId !== order.number
+  );
+
+  if (realOrders.length !== orders.length) {
+    writeOrders(realOrders);
+  }
+
+  return realOrders;
 }
 
 function writeOrders(orders) {
@@ -67,6 +74,35 @@ function readEvents() {
 function writeEvents(events) {
   ensureDataFile();
   fs.writeFileSync(EVENTS_FILE, JSON.stringify(events.slice(0, 30), null, 2));
+}
+
+function readDispatchedOrders() {
+  ensureDataFile();
+  return JSON.parse(fs.readFileSync(DISPATCHED_FILE, "utf8"));
+}
+
+function writeDispatchedOrders(orders) {
+  ensureDataFile();
+  fs.writeFileSync(DISPATCHED_FILE, JSON.stringify(orders.slice(0, 50), null, 2));
+}
+
+function recordDispatchedOrder(order, payload) {
+  const dispatchedOrders = readDispatchedOrders();
+  const dispatchedOrder = {
+    number: order.number,
+    orderId: order.orderId,
+    customer: order.customer || "Cliente",
+    neighborhood: order.neighborhood || "Bairro nao informado",
+    eventType: payload.eventType || "",
+    dispatchedAt: Date.now(),
+  };
+  const withoutDuplicate = dispatchedOrders.filter((item) =>
+    item.number !== dispatchedOrder.number &&
+    item.orderId !== dispatchedOrder.orderId
+  );
+
+  withoutDuplicate.unshift(dispatchedOrder);
+  writeDispatchedOrders(withoutDuplicate);
 }
 
 function recordEvent(request, body, result) {
@@ -552,8 +588,9 @@ async function handleWebhook(payload) {
 
   if (shouldRemoveFromWebhook || isDispatchEvent({ ...payload, ...payloadForOrder }, normalizedOrder)) {
     if (currentIndex >= 0) {
-      orders.splice(currentIndex, 1);
+      const removedOrder = orders.splice(currentIndex, 1)[0];
       writeOrders(orders);
+      recordDispatchedOrder(removedOrder, payload);
     }
 
     return {
@@ -628,6 +665,11 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/events") {
     sendJson(response, 200, { events: readEvents() });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/dispatched-orders") {
+    sendJson(response, 200, { orders: readDispatchedOrders() });
     return;
   }
 

@@ -17,6 +17,7 @@
         <nav class="tabs" aria-label="Filtro de pedidos">
           <button class="tab active" type="button" data-filter="all">Todos</button>
           <button class="tab" type="button" data-filter="late">Atrasados</button>
+          <button class="tab" type="button" data-filter="dispatched">Despachados</button>
           <button class="tab" type="button" data-filter="settings">Tempo</button>
           <button class="tab" type="button" data-filter="events">Eventos</button>
         </nav>
@@ -51,6 +52,17 @@
           <strong id="events-count">0</strong>
         </div>
         <div class="events-list" id="events-list"></div>
+      </section>
+
+      <section class="orders" id="dispatched-panel" aria-label="Pedidos despachados" hidden>
+        <div class="orders-head dispatched-head">
+          <span>Pedido</span>
+          <span>Cliente</span>
+          <span>Bairro</span>
+          <span>Despachado</span>
+        </div>
+
+        <div class="order-list" id="dispatched-list"></div>
       </section>
 
       <section class="orders" id="orders-panel" aria-label="Lista de pedidos">

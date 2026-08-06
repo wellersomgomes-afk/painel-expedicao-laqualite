@@ -5,12 +5,15 @@ let lateLimitMinutes = Number.isFinite(savedLateLimit) && savedLateLimit > 0
   : DEFAULT_LATE_LIMIT_MINUTES;
 
 let orders = [];
+let dispatchedOrders = [];
 let events = [];
 
 let activeFilter = "all";
 
 const orderList = document.querySelector("#order-list");
 const ordersPanel = document.querySelector("#orders-panel");
+const dispatchedPanel = document.querySelector("#dispatched-panel");
+const dispatchedList = document.querySelector("#dispatched-list");
 const settingsPanel = document.querySelector("#settings-panel");
 const eventsPanel = document.querySelector("#events-panel");
 const totalCount = document.querySelector("#total-count");
@@ -58,6 +61,7 @@ function statusFor(order) {
 function renderOrders() {
   const isSettingsOpen = activeFilter === "settings";
   const isEventsOpen = activeFilter === "events";
+  const isDispatchedOpen = activeFilter === "dispatched";
   const activeOrders = [...orders].sort((a, b) => elapsedSeconds(b) - elapsedSeconds(a));
   const lateOrders = activeOrders.filter(isLate);
   const visibleOrders = activeFilter === "late" ? lateOrders : activeOrders;
@@ -66,9 +70,15 @@ function renderOrders() {
   lateCount.textContent = String(lateOrders.length);
   limitInput.value = String(lateLimitMinutes);
   limitLabel.textContent = String(lateLimitMinutes);
-  ordersPanel.hidden = isSettingsOpen || isEventsOpen;
+  ordersPanel.hidden = isSettingsOpen || isEventsOpen || isDispatchedOpen;
+  dispatchedPanel.hidden = !isDispatchedOpen;
   settingsPanel.hidden = !isSettingsOpen;
   eventsPanel.hidden = !isEventsOpen;
+
+  if (isDispatchedOpen) {
+    renderDispatchedOrders();
+    return;
+  }
 
   if (isEventsOpen) {
     renderEvents();
@@ -107,6 +117,37 @@ function renderOrders() {
         </article>
       `;
     })
+    .join("");
+}
+
+function formatDispatchedTime(order) {
+  return new Date(Number(order.dispatchedAt)).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderDispatchedOrders() {
+  if (dispatchedOrders.length === 0) {
+    dispatchedList.innerHTML = '<div class="empty">Nenhum pedido despachado ainda.</div>';
+    return;
+  }
+
+  dispatchedList.innerHTML = dispatchedOrders
+    .map((order) => `
+      <article class="order-row dispatched-row">
+        <div class="order-number">#${order.number}</div>
+        <div class="order-info">
+          <span class="mobile-label">Cliente</span>
+          <strong>${order.customer}</strong>
+        </div>
+        <div class="order-info">
+          <span class="mobile-label">Bairro</span>
+          <strong>${order.neighborhood}</strong>
+        </div>
+        <div class="status ok">Despachado ${formatDispatchedTime(order)}</div>
+      </article>
+    `)
     .join("");
 }
 
@@ -154,6 +195,18 @@ async function loadEvents() {
   renderOrders();
 }
 
+async function loadDispatchedOrders() {
+  try {
+    const response = await fetch("/api/dispatched-orders");
+    const data = await response.json();
+    dispatchedOrders = Array.isArray(data.orders) ? data.orders : [];
+  } catch (error) {
+    dispatchedOrders = [];
+  }
+
+  renderOrders();
+}
+
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     activeFilter = tab.dataset.filter;
@@ -176,7 +229,9 @@ limitInput.addEventListener("input", () => {
 });
 
 loadOrders();
+loadDispatchedOrders();
 loadEvents();
 setInterval(loadOrders, 5000);
+setInterval(loadDispatchedOrders, 5000);
 setInterval(loadEvents, 5000);
 setInterval(renderOrders, 1000);
