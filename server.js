@@ -123,7 +123,54 @@ function isSameOrder(left, right) {
   );
 }
 
-function markKdsOrderReady(target) {
+function cardapioOrderUrl(order) {
+  if (order.orderURL) {
+    return order.orderURL;
+  }
+
+  return `${CARDAPIO_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(order.orderId || order.number)}`;
+}
+
+async function notifyCardapioOrderReady(order) {
+  const orderURL = cardapioOrderUrl(order);
+  const readyURL = `${orderURL.replace(/\/$/, "")}/readyForPickup`;
+  const token = await getCardapioToken(orderURL);
+  const response = await fetch(readyURL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`${readyURL} retornou HTTP ${response.status}${body ? `: ${body.slice(0, 300)}` : ""}`);
+  }
+
+  return {
+    ok: true,
+    action: "cardapio-ready",
+    order: order.number,
+  };
+}
+
+async function notifyCardapioOrderReadySafely(order) {
+  try {
+    return await notifyCardapioOrderReady(order);
+  } catch (error) {
+    return {
+      ok: false,
+      action: "cardapio-ready-failed",
+      order: order.number,
+      message: error.message,
+    };
+  }
+}
+
+async function markKdsOrderReady(target) {
   const orders = readOrders();
   const order = orders.find((item) => isSameOrder(item, target));
 
@@ -141,11 +188,14 @@ function markKdsOrderReady(target) {
   });
 
   writeKdsReadyOrders(readyOrders);
+  const cardapioResult = await notifyCardapioOrderReadySafely(order);
+  recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-ready" }, cardapioResult);
 
   return {
     ok: true,
     action: "ready",
     order: order.number,
+    cardapio: cardapioResult,
   };
 }
 
@@ -159,7 +209,7 @@ function isPizzaKdsItem(item) {
   return text.includes("pizza") || text.includes("pizzas");
 }
 
-function markKdsItemReady(target) {
+async function markKdsItemReady(target) {
   const orders = readOrders();
   const order = orders.find((item) => isSameOrder(item, target));
 
@@ -197,12 +247,20 @@ function markKdsItemReady(target) {
   }
 
   writeKdsReadyOrders(readyOrders);
+  const cardapioResult = isOrderReady
+    ? await notifyCardapioOrderReadySafely(order)
+    : { ok: true, action: "cardapio-not-called", message: "Ainda existem produtos pendentes no KDS." };
+
+  if (isOrderReady) {
+    recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-item-ready" }, cardapioResult);
+  }
 
   return {
     ok: true,
     action: isOrderReady ? "ready" : "item-ready",
     order: order.number,
     itemKey: target.itemKey || "",
+    cardapio: cardapioResult,
   };
 }
 
@@ -1013,6 +1071,7 @@ function normalizeOrder(payload) {
         order.createdDateTime
     ),
     rawStatus: String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || ""),
+    orderURL: String(order.orderURL || order.orderUrl || order.url || payload.orderURL || payload.orderUrl || ""),
     notes: extractNoteText(order),
     items: normalizeOrderItems(order),
   };
@@ -1370,7 +1429,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && url.pathname === "/api/kds-ready") {
     try {
       const body = await readBody(request);
-      const result = markKdsOrderReady(body);
+      const result = await markKdsOrderReady(body);
       sendJson(response, result.ok ? 200 : 404, result);
     } catch (error) {
       sendJson(response, 400, { ok: false, message: "Pedido invalido." });
@@ -1381,7 +1440,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && url.pathname === "/api/kds-item-ready") {
     try {
       const body = await readBody(request);
-      const result = markKdsItemReady(body);
+      const result = await markKdsItemReady(body);
       sendJson(response, result.ok ? 200 : 404, result);
     } catch (error) {
       sendJson(response, 400, { ok: false, message: "Produto invalido." });
