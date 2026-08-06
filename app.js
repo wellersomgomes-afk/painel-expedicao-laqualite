@@ -52,7 +52,7 @@ function statusFor(order) {
   }
 
   if (minutes >= Math.max(lateLimitMinutes - 1, 0)) {
-    return { label: "Atencao", className: "warning" };
+    return { label: "Atenção", className: "warning" };
   }
 
   return { label: "No prazo", className: "ok" };
