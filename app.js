@@ -8,7 +8,7 @@ let orders = [];
 let dispatchedOrders = [];
 let events = [];
 
-let activeFilter = "all";
+let activeFilter = "delivery";
 
 const orderList = document.querySelector("#order-list");
 const ordersPanel = document.querySelector("#orders-panel");
@@ -58,15 +58,30 @@ function statusFor(order) {
   return { label: "No prazo", className: "ok" };
 }
 
+function isPickup(order) {
+  return order.fulfillmentType === "pickup";
+}
+
+function isDelivery(order) {
+  return !isPickup(order);
+}
+
 function renderOrders() {
   const isSettingsOpen = activeFilter === "settings";
   const isEventsOpen = activeFilter === "events";
   const isDispatchedOpen = activeFilter === "dispatched";
   const activeOrders = [...orders].sort((a, b) => elapsedSeconds(b) - elapsedSeconds(a));
-  const lateOrders = activeOrders.filter(isLate);
-  const visibleOrders = activeFilter === "late" ? lateOrders : activeOrders;
+  const deliveryOrders = activeOrders.filter(isDelivery);
+  const pickupOrders = activeOrders.filter(isPickup);
+  const lateOrders = deliveryOrders.filter(isLate);
+  const visibleOrders =
+    activeFilter === "late"
+      ? lateOrders
+      : activeFilter === "pickup"
+        ? pickupOrders
+        : deliveryOrders;
 
-  totalCount.textContent = String(activeOrders.length);
+  totalCount.textContent = String(deliveryOrders.length);
   lateCount.textContent = String(lateOrders.length);
   limitInput.value = String(lateLimitMinutes);
   limitLabel.textContent = String(lateLimitMinutes);
@@ -93,7 +108,9 @@ function renderOrders() {
     orderList.innerHTML =
       activeFilter === "late"
         ? '<div class="empty">Nenhum pedido atrasado no momento.</div>'
-        : '<div class="empty">Nenhum pedido na loja no momento.</div>';
+        : activeFilter === "pickup"
+          ? '<div class="empty">Nenhum pedido de retirada no momento.</div>'
+          : '<div class="empty">Nenhuma entrega na loja no momento.</div>';
     return;
   }
 

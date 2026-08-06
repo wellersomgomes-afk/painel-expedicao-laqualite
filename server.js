@@ -48,11 +48,18 @@ function ensureDataFile() {
 function readOrders() {
   ensureDataFile();
   const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, "utf8"));
-  const realOrders = orders.filter((order) =>
-    !demoOrderNumbers.has(String(order.number)) &&
-    order.orderId &&
-    order.orderId !== order.number
-  );
+  const realOrders = orders
+    .filter((order) =>
+      !demoOrderNumbers.has(String(order.number)) &&
+      order.orderId &&
+      order.orderId !== order.number
+    )
+    .map((order) => ({
+      ...order,
+      fulfillmentType:
+        order.fulfillmentType ||
+        (order.neighborhood === "Bairro nao informado" ? "pickup" : "delivery"),
+    }));
 
   if (realOrders.length !== orders.length) {
     writeOrders(realOrders);
@@ -208,6 +215,45 @@ function parseDateToTimestamp(value) {
 
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function detectFulfillmentType(order) {
+  const explicitValue = String(getDeepValue(order, [
+    "fulfillmentType",
+    "fulfillment",
+    "orderType",
+    "type",
+    "delivery.type",
+    "delivery.mode",
+    "delivery.deliveryType",
+    "takeout.type",
+    "pickup.type",
+    "serviceType",
+  ]) || findValueByKeyNames(order, [
+    "fulfillmentType",
+    "fulfillment",
+    "orderType",
+    "deliveryType",
+    "serviceType",
+    "mode",
+  ]) || "").toLowerCase();
+
+  if (
+    explicitValue.includes("takeout") ||
+    explicitValue.includes("pickup") ||
+    explicitValue.includes("retirada") ||
+    explicitValue.includes("balcao") ||
+    explicitValue.includes("balcão") ||
+    explicitValue.includes("withdraw")
+  ) {
+    return "pickup";
+  }
+
+  if (explicitValue.includes("delivery") || explicitValue.includes("entrega")) {
+    return "delivery";
+  }
+
+  return "";
 }
 
 function tokenUrlsFromOrderUrl(orderURL) {
@@ -437,6 +483,40 @@ function normalizeOrder(payload) {
     return null;
   }
 
+  const neighborhood = String(getDeepValue(order, [
+    "deliveryAddress.neighborhood",
+    "delivery.address.neighborhood",
+    "delivery.deliveryAddress.neighborhood",
+    "delivery.delivery_address.neighborhood",
+    "deliveryAddress.district",
+    "delivery.address.district",
+    "delivery.deliveryAddress.district",
+    "deliveryAddress.neighbourhood",
+    "delivery.address.neighbourhood",
+    "delivery.deliveryAddress.neighbourhood",
+    "address.neighborhood",
+    "address.district",
+    "address.neighbourhood",
+    "endereco.bairro",
+    "customer.address.neighborhood",
+    "customer.address.district",
+    "buyer.address.neighborhood",
+    "buyer.address.district",
+    "bairro",
+    "district",
+    "neighborhood",
+    "neighbourhood",
+  ]) || findValueByKeyNames(order, [
+    "bairro",
+    "neighborhood",
+    "neighbourhood",
+    "district",
+    "districtName",
+    "area",
+    "zone",
+  ]) || "Bairro nao informado");
+  const detectedFulfillmentType = detectFulfillmentType(order);
+
   return {
     number,
     orderId: String(getDeepValue(order, [
@@ -452,38 +532,10 @@ function normalizeOrder(payload) {
       "buyer.name",
       "consumer.name",
     ]) || "Cliente"),
-    neighborhood: String(getDeepValue(order, [
-      "deliveryAddress.neighborhood",
-      "delivery.address.neighborhood",
-      "delivery.deliveryAddress.neighborhood",
-      "delivery.delivery_address.neighborhood",
-      "deliveryAddress.district",
-      "delivery.address.district",
-      "delivery.deliveryAddress.district",
-      "deliveryAddress.neighbourhood",
-      "delivery.address.neighbourhood",
-      "delivery.deliveryAddress.neighbourhood",
-      "address.neighborhood",
-      "address.district",
-      "address.neighbourhood",
-      "endereco.bairro",
-      "customer.address.neighborhood",
-      "customer.address.district",
-      "buyer.address.neighborhood",
-      "buyer.address.district",
-      "bairro",
-      "district",
-      "neighborhood",
-      "neighbourhood",
-    ]) || findValueByKeyNames(order, [
-      "bairro",
-      "neighborhood",
-      "neighbourhood",
-      "district",
-      "districtName",
-      "area",
-      "zone",
-    ]) || "Bairro nao informado"),
+    neighborhood,
+    fulfillmentType:
+      detectedFulfillmentType ||
+      (neighborhood === "Bairro nao informado" ? "pickup" : "delivery"),
     arrivedAt: parseDateToTimestamp(
       order.arrivedAt ||
         order.createdAt ||
@@ -565,6 +617,7 @@ async function handleWebhook(payload) {
     orderId: String(payload.orderId || payload.orderID || payload.id || ""),
     customer: "",
     neighborhood: "",
+    fulfillmentType: "delivery",
     arrivedAt: Date.now(),
     rawStatus: "",
   };
@@ -614,6 +667,7 @@ async function handleWebhook(payload) {
     order: normalizedOrder.number,
     customer: normalizedOrder.customer,
     neighborhood: normalizedOrder.neighborhood,
+    fulfillmentType: normalizedOrder.fulfillmentType,
   };
 }
 
