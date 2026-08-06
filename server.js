@@ -13,7 +13,8 @@ const KDS_READY_FILE = path.join(DATA_DIR, "kds-ready-orders.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
-const CARDAPIO_READY_ENDPOINT_TEMPLATE = process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "";
+const CARDAPIO_READY_ENDPOINT_TEMPLATE =
+  process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "{orderURL}/readyForPickup";
 const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
@@ -133,15 +134,6 @@ function cardapioOrderUrl(order) {
 }
 
 async function notifyCardapioOrderReady(order) {
-  if (!CARDAPIO_READY_ENDPOINT_TEMPLATE) {
-    return {
-      ok: true,
-      action: "cardapio-ready-skipped",
-      order: order.number,
-      message: "Envio de pronto ao Cardapio Web desativado para evitar marcar como pronto para retirada.",
-    };
-  }
-
   const orderURL = cardapioOrderUrl(order);
   const readyURL = CARDAPIO_READY_ENDPOINT_TEMPLATE
     .replace("{orderId}", encodeURIComponent(order.orderId || order.number))
@@ -164,7 +156,7 @@ async function notifyCardapioOrderReady(order) {
 
   return {
     ok: true,
-    action: "cardapio-ready",
+    action: "cardapio-order-ready",
     order: order.number,
   };
 }
@@ -175,7 +167,7 @@ async function notifyCardapioOrderReadySafely(order) {
   } catch (error) {
     return {
       ok: false,
-      action: "cardapio-ready-failed",
+      action: "cardapio-order-ready-failed",
       order: order.number,
       message: error.message,
     };
