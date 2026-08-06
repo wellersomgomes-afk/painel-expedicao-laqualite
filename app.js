@@ -8,7 +8,7 @@ let orders = [];
 let dispatchedOrders = [];
 let events = [];
 
-let activeFilter = "delivery";
+let activeFilter = "all";
 
 const orderList = document.querySelector("#order-list");
 const ordersPanel = document.querySelector("#orders-panel");
@@ -66,6 +66,12 @@ function isDelivery(order) {
   return !isPickup(order);
 }
 
+function displayNeighborhood(order) {
+  return isPickup(order) || order.neighborhood === "Bairro nao informado"
+    ? "Retirada"
+    : order.neighborhood;
+}
+
 function renderOrders() {
   const isSettingsOpen = activeFilter === "settings";
   const isEventsOpen = activeFilter === "events";
@@ -79,9 +85,11 @@ function renderOrders() {
       ? lateOrders
       : activeFilter === "pickup"
         ? pickupOrders
-        : deliveryOrders;
+        : activeFilter === "delivery"
+          ? deliveryOrders
+          : activeOrders;
 
-  totalCount.textContent = String(deliveryOrders.length);
+  totalCount.textContent = String(activeOrders.length);
   lateCount.textContent = String(lateOrders.length);
   limitInput.value = String(lateLimitMinutes);
   limitLabel.textContent = String(lateLimitMinutes);
@@ -110,7 +118,9 @@ function renderOrders() {
         ? '<div class="empty">Nenhum pedido atrasado no momento.</div>'
         : activeFilter === "pickup"
           ? '<div class="empty">Nenhum pedido de retirada no momento.</div>'
-          : '<div class="empty">Nenhuma entrega na loja no momento.</div>';
+          : activeFilter === "delivery"
+            ? '<div class="empty">Nenhuma entrega na loja no momento.</div>'
+            : '<div class="empty">Nenhum pedido na loja no momento.</div>';
     return;
   }
 
@@ -127,7 +137,7 @@ function renderOrders() {
           </div>
           <div class="order-info">
             <span class="mobile-label">Bairro</span>
-            <strong>${order.neighborhood}</strong>
+            <strong>${displayNeighborhood(order)}</strong>
           </div>
           <div class="timer">${formatTimer(order)}</div>
           <div class="status ${status.className}">${status.label}</div>
@@ -160,7 +170,7 @@ function renderDispatchedOrders() {
         </div>
         <div class="order-info">
           <span class="mobile-label">Bairro</span>
-          <strong>${order.neighborhood}</strong>
+          <strong>${displayNeighborhood(order)}</strong>
         </div>
         <div class="status ok">Despachado ${formatDispatchedTime(order)}</div>
       </article>

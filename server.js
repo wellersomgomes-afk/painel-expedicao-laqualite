@@ -62,6 +62,11 @@ function readOrders() {
       fulfillmentType:
         order.fulfillmentType ||
         (order.neighborhood === "Bairro nao informado" ? "pickup" : "delivery"),
+      neighborhood:
+        order.neighborhood === "Bairro nao informado" ||
+        order.fulfillmentType === "pickup"
+          ? "Retirada"
+          : order.neighborhood,
     }));
 
   if (realOrders.length !== orders.length) {
@@ -102,7 +107,11 @@ function recordDispatchedOrder(order, payload) {
     number: order.number,
     orderId: order.orderId,
     customer: order.customer || "Cliente",
-    neighborhood: order.neighborhood || "Bairro nao informado",
+    neighborhood:
+      order.fulfillmentType === "pickup" ||
+      order.neighborhood === "Bairro nao informado"
+        ? "Retirada"
+        : order.neighborhood,
     eventType: payload.eventType || "",
     dispatchedAt: Date.now(),
   };
@@ -612,6 +621,9 @@ function normalizeOrder(payload) {
     "zone",
   ]) || "Bairro nao informado");
   const detectedFulfillmentType = detectFulfillmentType(order);
+  const fulfillmentType =
+    detectedFulfillmentType ||
+    (neighborhood === "Bairro nao informado" ? "pickup" : "delivery");
 
   return {
     number,
@@ -628,10 +640,8 @@ function normalizeOrder(payload) {
       "buyer.name",
       "consumer.name",
     ]) || "Cliente"),
-    neighborhood,
-    fulfillmentType:
-      detectedFulfillmentType ||
-      (neighborhood === "Bairro nao informado" ? "pickup" : "delivery"),
+    neighborhood: fulfillmentType === "pickup" ? "Retirada" : neighborhood,
+    fulfillmentType,
     arrivedAt: parseDateToTimestamp(
       order.arrivedAt ||
         order.createdAt ||
