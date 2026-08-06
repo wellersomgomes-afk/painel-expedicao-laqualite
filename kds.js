@@ -35,7 +35,7 @@ function normalizeText(value) {
 function isBorderText(value) {
   const text = normalizeText(value);
 
-  return text.includes("borda") || text.includes("requeijao") || text.includes("catupiry");
+  return text.includes("borda");
 }
 
 function renderComplement(complement) {
