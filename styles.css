@@ -426,7 +426,40 @@ h1 {
 
 .kds-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.kds-section {
+  display: grid;
+  gap: 14px;
+}
+
+.kds-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.kds-section-head span {
+  color: var(--muted);
+  font-size: 24px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kds-section-head strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.kds-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -643,8 +676,8 @@ h1 {
   background: var(--panel);
 }
 
-.kds-size-compact .kds-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.kds-size-compact .kds-section-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .kds-size-compact .kds-order-card {
@@ -713,8 +746,8 @@ h1 {
   font-size: 20px;
 }
 
-.kds-size-large .kds-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.kds-size-large .kds-section-grid {
+  grid-template-columns: 1fr;
 }
 
 .kds-size-large .kds-order-card {
@@ -760,6 +793,41 @@ h1 {
   font-size: 30px;
 }
 
+@media (max-width: 1180px) {
+  .screen.kds-screen {
+    padding: 20px;
+  }
+
+  .kds-screen .topbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .kds-actions {
+    justify-content: space-between;
+  }
+
+  .kds-section-grid,
+  .kds-size-compact .kds-section-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kds-size-large .kds-section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kds-order-card {
+    min-height: 0;
+  }
+
+  .kds-ready-button,
+  .kds-ready-stamp {
+    min-height: 68px;
+    font-size: 28px;
+  }
+}
+
 @media (max-width: 760px) {
   .screen {
     padding: 18px;
@@ -782,8 +850,9 @@ h1 {
   .settings-panel,
   .events-panel,
   .kds-grid,
-  .kds-size-compact .kds-grid,
-  .kds-size-large .kds-grid {
+  .kds-section-grid,
+  .kds-size-compact .kds-section-grid,
+  .kds-size-large .kds-section-grid {
     grid-template-columns: 1fr;
   }
 

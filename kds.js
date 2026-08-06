@@ -143,6 +143,28 @@ function renderOrder(order) {
   `;
 }
 
+function isPickupOrder(order) {
+  return order.fulfillmentType === "pickup";
+}
+
+function renderOrderSection(title, orders) {
+  if (orders.length === 0) {
+    return "";
+  }
+
+  return `
+    <section class="kds-section">
+      <header class="kds-section-head">
+        <span>${title}</span>
+        <strong>${orders.length}</strong>
+      </header>
+      <div class="kds-section-grid">
+        ${orders.map(renderOrder).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function applyCardSize() {
   document.body.classList.remove("kds-size-compact", "kds-size-normal", "kds-size-large");
   document.body.classList.add(`kds-size-${cardSize}`);
@@ -180,7 +202,13 @@ function renderKds() {
     return;
   }
 
-  grid.innerHTML = orders.map(renderOrder).join("");
+  const deliveryOrders = orders.filter((order) => !isPickupOrder(order));
+  const pickupOrders = orders.filter(isPickupOrder);
+
+  grid.innerHTML = [
+    renderOrderSection("Entregas", deliveryOrders),
+    renderOrderSection("Retiradas", pickupOrders),
+  ].join("");
 }
 
 async function loadKdsOrders() {
