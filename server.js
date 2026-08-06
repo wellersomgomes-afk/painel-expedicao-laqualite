@@ -11,7 +11,7 @@ const EVENTS_FILE = path.join(DATA_DIR, "events.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL =
-  process.env.CARDAPIO_TOKEN_URL || "https://integracao.cardapioweb.com/api/open_delivery/v1/oauth/token";
+  process.env.CARDAPIO_TOKEN_URL || "";
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
@@ -137,7 +137,23 @@ function parseDateToTimestamp(value) {
   return Number.isNaN(parsed) ? Date.now() : parsed;
 }
 
-async function getCardapioToken() {
+function tokenUrlsFromOrderUrl(orderURL) {
+  if (CARDAPIO_TOKEN_URL) {
+    return [CARDAPIO_TOKEN_URL];
+  }
+
+  const orderBaseUrl = orderURL.split("/orders/")[0];
+  const baseWithoutVersion = orderBaseUrl.replace(/\/v\d+$/, "");
+
+  return [
+    `${orderBaseUrl}/oauth/token`,
+    `${baseWithoutVersion}/oauth/token`,
+    "https://integracao.cardapioweb.com/api/open_delivery/oauth/token",
+    "https://integracao.cardapioweb.com/api/open_delivery/v1/oauth/token",
+  ];
+}
+
+async function getCardapioToken(orderURL) {
   if (!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) {
     throw new Error("Credenciais do Cardapio Web nao configuradas no Render.");
   }
@@ -146,21 +162,32 @@ async function getCardapioToken() {
     return cachedToken;
   }
 
-  const response = await fetch(CARDAPIO_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: CARDAPIO_CLIENT_ID,
-      client_secret: CARDAPIO_CLIENT_SECRET,
-      grant_type: "client_credentials",
-    }),
-  });
+  let lastError = "";
+  let data = null;
 
-  if (!response.ok) {
-    throw new Error(`Falha ao autenticar no Cardapio Web: HTTP ${response.status}`);
+  for (const tokenUrl of tokenUrlsFromOrderUrl(orderURL)) {
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: CARDAPIO_CLIENT_ID,
+        client_secret: CARDAPIO_CLIENT_SECRET,
+        grant_type: "client_credentials",
+      }),
+    });
+
+    if (response.ok) {
+      data = await response.json();
+      break;
+    }
+
+    lastError = `${tokenUrl} retornou HTTP ${response.status}`;
   }
 
-  const data = await response.json();
+  if (!data) {
+    throw new Error(`Falha ao autenticar no Cardapio Web: ${lastError}`);
+  }
+
   cachedToken = data.access_token;
   cachedTokenExpiresAt = Date.now() + Math.max(Number(data.expires_in || 3600) - 60, 60) * 1000;
 
@@ -172,7 +199,7 @@ async function getCardapioToken() {
 }
 
 async function fetchCardapioOrder(orderURL) {
-  const token = await getCardapioToken();
+  const token = await getCardapioToken(orderURL);
   const response = await fetch(orderURL, {
     headers: {
       Authorization: `Bearer ${token}`,
