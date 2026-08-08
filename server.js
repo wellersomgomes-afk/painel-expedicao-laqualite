@@ -1082,6 +1082,23 @@ function normalizeOrder(payload) {
   const fulfillmentType =
     detectedFulfillmentType ||
     (neighborhood === "Bairro nao informado" ? "pickup" : "delivery");
+  const city = String(getDeepValue(order, [
+    "deliveryAddress.city",
+    "delivery.address.city",
+    "delivery.deliveryAddress.city",
+    "delivery.delivery_address.city",
+    "address.city",
+    "endereco.cidade",
+    "customer.address.city",
+    "buyer.address.city",
+    "cidade",
+    "city",
+  ]) || findValueByKeyNames(order, [
+    "cidade",
+    "city",
+    "cityName",
+    "municipio",
+  ]) || "Cidade nao informada");
 
   return {
     number,
@@ -1099,6 +1116,7 @@ function normalizeOrder(payload) {
       "consumer.name",
     ]) || "Cliente"),
     neighborhood: fulfillmentType === "pickup" ? "Retirada" : neighborhood,
+    city: fulfillmentType === "pickup" ? "Retirada" : city,
     fulfillmentType,
     arrivedAt: parseDateToTimestamp(
       order.arrivedAt ||

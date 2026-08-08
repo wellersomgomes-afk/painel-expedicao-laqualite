@@ -74,6 +74,10 @@ function displayNeighborhood(order) {
     : order.neighborhood;
 }
 
+function displayCity(order) {
+  return isPickup(order) ? "Retirada" : order.city || "Cidade nao informada";
+}
+
 function updateFullscreenButton() {
   if (!fullscreenButton) {
     return;
@@ -162,6 +166,10 @@ function renderOrders() {
             <span class="mobile-label">Bairro</span>
             <strong>${displayNeighborhood(order)}</strong>
           </div>
+          <div class="order-info">
+            <span class="mobile-label">Cidade</span>
+            <strong>${displayCity(order)}</strong>
+          </div>
           <div class="timer">${formatTimer(order)}</div>
           <div class="status ${status.className}">${status.label}</div>
         </article>
@@ -195,6 +203,10 @@ function renderDispatchedOrders() {
         <div class="order-info">
           <span class="mobile-label">Bairro</span>
           <strong>${displayNeighborhood(order)}</strong>
+        </div>
+        <div class="order-info">
+          <span class="mobile-label">Cidade</span>
+          <strong>${displayCity(order)}</strong>
         </div>
         <div class="status ok">Despachado ${formatDispatchedTime(order)}</div>
       </article>
