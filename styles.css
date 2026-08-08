@@ -804,8 +804,9 @@ h1 {
 
 .kds-section-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 420px));
   gap: 12px;
+  align-items: start;
 }
 
 .kds-order-card {
@@ -1115,8 +1116,8 @@ h1 {
 
 .kds-complement {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
   padding: 8px 10px;
   border-radius: 6px;
@@ -1125,8 +1126,14 @@ h1 {
   font-weight: 700;
 }
 
-.kds-complement::before {
-  content: "-";
+.kds-complement strong {
+  color: var(--text);
+  font-weight: 900;
+  text-align: right;
+}
+
+.kds-complement span {
+  overflow-wrap: anywhere;
 }
 
 .kds-complement-border {
@@ -1136,8 +1143,7 @@ h1 {
   font-weight: 900;
 }
 
-.kds-complement-border::before {
-  content: "BORDA";
+.kds-complement-border strong {
   width: fit-content;
   padding: 4px 7px;
   border-radius: 4px;
@@ -1189,7 +1195,7 @@ h1 {
 }
 
 .kds-size-compact .kds-section-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 400px));
 }
 
 .kds-size-compact .kds-order-card {
@@ -1264,7 +1270,7 @@ h1 {
 }
 
 .kds-size-large .kds-section-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 520px));
 }
 
 .kds-size-large .kds-order-card {
@@ -1387,15 +1393,15 @@ h1 {
   }
 
   .kds-section-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(340px, 400px));
   }
 
   .kds-size-compact .kds-section-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 380px));
   }
 
   .kds-size-large .kds-section-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 480px));
   }
 
   .kds-order-card {
@@ -1470,7 +1476,7 @@ h1 {
   .kds-size-compact .kds-section-grid,
   .kds-size-normal .kds-section-grid,
   .kds-section-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(330px, 390px));
   }
 
   .kds-dispatch-mode .kds-section-grid {
@@ -1558,7 +1564,7 @@ h1 {
   }
 
   .kds-complement {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr);
   }
 
   .tabs {

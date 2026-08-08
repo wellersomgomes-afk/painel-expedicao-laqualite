@@ -213,11 +213,12 @@ function filterOrderForDispatch(order) {
 
 function renderComplement(complement) {
   const highlightClass = isBorderText(complement.name) ? " kds-complement-border" : "";
+  const quantity = Number(complement.quantity || 1);
 
   return `
     <li class="kds-complement${highlightClass}">
+      <strong>${quantity > 1 ? `${formatQuantity(complement.quantity)}x` : ""}</strong>
       <span>${complement.name}</span>
-      ${Number(complement.quantity || 1) > 1 ? `<strong>${formatQuantity(complement.quantity)}x</strong>` : ""}
     </li>
   `;
 }
