@@ -486,6 +486,33 @@ function toNumber(value, fallback = 1) {
   return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
 }
 
+function textFromValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(textFromValue).filter(Boolean).join(" ");
+  }
+
+  if (typeof value === "object") {
+    return String(getDeepValue(value, [
+      "name",
+      "title",
+      "description",
+      "label",
+      "nome",
+      "categoryName",
+    ]) || Object.values(value).map(textFromValue).filter(Boolean).join(" "));
+  }
+
+  return "";
+}
+
 function firstArray(source, paths) {
   for (const currentPath of paths) {
     const value = currentPath.split(".").reduce((current, key) => current?.[key], source);
@@ -535,7 +562,22 @@ function findItemArray(source) {
           getDeepValue(item, ["quantity", "qty", "amount", "count"])
         )
       )) {
-        return value;
+        const parentCategory = textFromValue(getDeepValue(current, [
+          "category.name",
+          "category",
+          "categoryName",
+          "name",
+          "title",
+          "description",
+          "group.name",
+          "group",
+          "nome",
+        ]));
+
+        return value.map((item) => ({
+          ...item,
+          _parentCategory: item._parentCategory || parentCategory,
+        }));
       }
 
       if (value && typeof value === "object") {
@@ -572,17 +614,30 @@ function normalizeOrderItems(order) {
           "count",
           "quantidade",
         ])),
-        category: String(getDeepValue(item, [
+        category: textFromValue(getDeepValue(item, [
           "category.name",
           "category",
           "categoryName",
+          "categories",
+          "categories.name",
+          "section.name",
+          "section",
+          "sector.name",
+          "sector",
+          "department.name",
+          "department",
           "group.name",
           "group",
           "product.category.name",
           "product.category",
           "product.categoryName",
+          "product.categories",
+          "item.category.name",
+          "item.category",
+          "item.categoryName",
           "produto.categoria.nome",
-        ]) || ""),
+          "_parentCategory",
+        ])),
         notes: extractNoteText(item),
         complements: normalizeComplements(item),
       };
