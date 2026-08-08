@@ -20,6 +20,7 @@ const settingsPanel = document.querySelector("#kds-settings-panel");
 const searchInput = document.querySelector("#kds-search-input");
 const searchClearButton = document.querySelector("#kds-search-clear");
 const APP_TIME_ZONE = "America/Sao_Paulo";
+const DUPLICATE_TIME_WINDOW_MINUTES = 10;
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
 let activeSector = localStorage.getItem("kdsActiveSector") || "pizzas";
@@ -75,6 +76,88 @@ function normalizeText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function normalizeCustomerName(value) {
+  return normalizeText(value)
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeAddress(value) {
+  return normalizeCustomerName(value);
+}
+
+function duplicateKeyCounts(sourceOrders, keyFactory) {
+  return sourceOrders.reduce((counts, order) => {
+    const key = keyFactory(order);
+
+    if (key) {
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, new Map());
+}
+
+function orderDuplicateId(order) {
+  return String(order.orderId || order.number || "");
+}
+
+function duplicateNearbyOrders(sourceOrders) {
+  const windowMs = DUPLICATE_TIME_WINDOW_MINUTES * 60000;
+  const comparableOrders = sourceOrders
+    .map((order) => ({
+      id: orderDuplicateId(order),
+      arrivedAt: Number(order.arrivedAt),
+      identities: [
+        normalizePhone(order.phone),
+        normalizeAddress(order.address),
+        normalizeCustomerName(order.customer),
+      ].filter(Boolean),
+    }))
+    .filter((order) => order.id && Number.isFinite(order.arrivedAt) && order.identities.length > 0);
+  const duplicates = new Set();
+
+  comparableOrders.forEach((order, index) => {
+    comparableOrders.slice(index + 1).forEach((otherOrder) => {
+      const isNear = Math.abs(order.arrivedAt - otherOrder.arrivedAt) <= windowMs;
+      const isSameClient = order.identities.some((identity) => otherOrder.identities.includes(identity));
+
+      if (isNear && isSameClient) {
+        duplicates.add(order.id);
+        duplicates.add(otherOrder.id);
+      }
+    });
+  });
+
+  return duplicates;
+}
+
+function duplicateSignals(sourceOrders) {
+  return {
+    names: duplicateKeyCounts(sourceOrders, (order) => normalizeCustomerName(order.customer)),
+    phones: duplicateKeyCounts(sourceOrders, (order) => normalizePhone(order.phone)),
+    addresses: duplicateKeyCounts(sourceOrders, (order) => normalizeAddress(order.address)),
+    nearby: duplicateNearbyOrders(sourceOrders),
+  };
+}
+
+function isPossibleDuplicate(order, signals) {
+  const customer = normalizeCustomerName(order.customer);
+  const phone = normalizePhone(order.phone);
+  const address = normalizeAddress(order.address);
+  const id = orderDuplicateId(order);
+
+  return (
+    (customer && (signals.names.get(customer) || 0) > 1) ||
+    (phone && (signals.phones.get(phone) || 0) > 1) ||
+    (address && (signals.addresses.get(address) || 0) > 1) ||
+    (id && signals.nearby.has(id))
+  );
 }
 
 function isBorderText(value) {
@@ -266,17 +349,19 @@ function renderItem(item, order) {
   `;
 }
 
-function renderOrder(order) {
+function renderOrder(order, duplicateInfo = duplicateSignals([])) {
   const service = order.fulfillmentType === "pickup" ? "Retirada" : order.neighborhood || "Entrega";
   const isReadyView = activeView === "ready";
   const readyLabel = sectorReadyLabel();
+  const isDuplicate = isPossibleDuplicate(order, duplicateInfo);
 
   return `
-    <article class="kds-order-card${isReadyView ? " is-ready" : ""}" data-number="${order.number}" data-order-id="${order.orderId || ""}">
+    <article class="kds-order-card${isReadyView ? " is-ready" : ""}${isDuplicate ? " has-duplicate-customer" : ""}" data-number="${order.number}" data-order-id="${order.orderId || ""}">
       <header class="kds-order-head">
         <div>
           <strong>#${order.number}</strong>
           <span>${order.customer || "Cliente"}</span>
+          ${isDuplicate ? '<em class="duplicate-alert kds-duplicate-alert">Possível duplicado</em>' : ""}
         </div>
         <div class="kds-order-time">${isReadyView ? `Pronto ${formatReadyTime(order)}` : formatTimer(order)}</div>
       </header>
@@ -301,17 +386,19 @@ function renderOrder(order) {
   `;
 }
 
-function renderDispatchOrder(order) {
+function renderDispatchOrder(order, duplicateInfo = duplicateSignals([])) {
   const isPickup = isPickupOrder(order);
   const service = isPickup ? "Retirada" : order.neighborhood || "Entrega";
   const buttonLabel = isPickup ? "Pronto para retirada" : "Despachar";
+  const isDuplicate = isPossibleDuplicate(order, duplicateInfo);
 
   return `
-    <article class="dispatch-card" data-number="${order.number}" data-order-id="${order.orderId || ""}">
+    <article class="dispatch-card${isDuplicate ? " has-duplicate-customer" : ""}" data-number="${order.number}" data-order-id="${order.orderId || ""}">
       <header class="dispatch-card-head">
         <div class="dispatch-main">
           <strong>#${order.number}</strong>
           <span>${order.customer || "Não informado"}</span>
+          ${isDuplicate ? '<em class="duplicate-alert kds-duplicate-alert">Possível duplicado</em>' : ""}
         </div>
         <div class="dispatch-time">${formatTimer(order)}</div>
       </header>
@@ -346,7 +433,7 @@ function isPickupOrder(order) {
   return order.fulfillmentType === "pickup";
 }
 
-function renderOrderSection(title, orders, renderer = renderOrder) {
+function renderOrderSection(title, orders, renderer = renderOrder, duplicateInfo = duplicateSignals([])) {
   if (orders.length === 0) {
     return "";
   }
@@ -358,7 +445,7 @@ function renderOrderSection(title, orders, renderer = renderOrder) {
         <strong>${orders.length}</strong>
       </header>
       <div class="kds-section-grid">
-        ${orders.map(renderer).join("")}
+        ${orders.map((order) => renderer(order, duplicateInfo)).join("")}
       </div>
     </section>
   `;
@@ -492,6 +579,7 @@ function renderKds() {
   applyActiveSector();
   applyActiveService();
   const orders = currentOrders();
+  const duplicateInfo = duplicateSignals(orders);
   const productionSummaryOrders = ordersForSummary(board.productionOrders, { dispatchMode: false });
   const readySummaryOrders = ordersForSummary(board.readyOrders, { dispatchMode });
 
@@ -516,22 +604,22 @@ function renderKds() {
 
   if (dispatchMode) {
     if (activeService === "both") {
-      grid.innerHTML = renderOrderSection("Despacho", orders, renderDispatchOrder);
+      grid.innerHTML = renderOrderSection("Despacho", orders, renderDispatchOrder, duplicateInfo);
       return;
     }
 
     const dispatchTitle = activeService === "pickup" ? "Retiradas prontas" : "Entregas prontas";
-    grid.innerHTML = renderOrderSection(dispatchTitle, orders, renderDispatchOrder);
+    grid.innerHTML = renderOrderSection(dispatchTitle, orders, renderDispatchOrder, duplicateInfo);
     return;
   }
 
   if (activeService === "both") {
-    grid.innerHTML = renderOrderSection("Pedidos", orders);
+    grid.innerHTML = renderOrderSection("Pedidos", orders, renderOrder, duplicateInfo);
     return;
   }
 
   const sectionTitle = activeService === "pickup" ? "Retiradas" : "Entregas";
-  grid.innerHTML = renderOrderSection(sectionTitle, orders);
+  grid.innerHTML = renderOrderSection(sectionTitle, orders, renderOrder, duplicateInfo);
 }
 
 async function loadKdsOrders() {

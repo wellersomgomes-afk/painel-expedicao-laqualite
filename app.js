@@ -26,6 +26,7 @@ const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
 const fullscreenButton = document.querySelector("#fullscreen-button");
 const APP_TIME_ZONE = "America/Sao_Paulo";
+const DUPLICATE_TIME_WINDOW_MINUTES = 10;
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -84,6 +85,91 @@ function displayCity(order) {
   return isPickup(order) ? "" : order.city || "Cidade nao informada";
 }
 
+function normalizeCustomerName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeAddress(value) {
+  return normalizeCustomerName(value);
+}
+
+function duplicateKeyCounts(sourceOrders, keyFactory) {
+  return sourceOrders.reduce((counts, order) => {
+    const key = keyFactory(order);
+
+    if (key) {
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, new Map());
+}
+
+function orderDuplicateId(order) {
+  return String(order.orderId || order.number || "");
+}
+
+function duplicateNearbyOrders(sourceOrders) {
+  const windowMs = DUPLICATE_TIME_WINDOW_MINUTES * 60000;
+  const comparableOrders = sourceOrders
+    .map((order) => ({
+      id: orderDuplicateId(order),
+      arrivedAt: Number(order.arrivedAt),
+      identities: [
+        normalizePhone(order.phone),
+        normalizeAddress(order.address),
+        normalizeCustomerName(order.customer),
+      ].filter(Boolean),
+    }))
+    .filter((order) => order.id && Number.isFinite(order.arrivedAt) && order.identities.length > 0);
+  const duplicates = new Set();
+
+  comparableOrders.forEach((order, index) => {
+    comparableOrders.slice(index + 1).forEach((otherOrder) => {
+      const isNear = Math.abs(order.arrivedAt - otherOrder.arrivedAt) <= windowMs;
+      const isSameClient = order.identities.some((identity) => otherOrder.identities.includes(identity));
+
+      if (isNear && isSameClient) {
+        duplicates.add(order.id);
+        duplicates.add(otherOrder.id);
+      }
+    });
+  });
+
+  return duplicates;
+}
+
+function duplicateSignals(sourceOrders) {
+  return {
+    names: duplicateKeyCounts(sourceOrders, (order) => normalizeCustomerName(order.customer)),
+    phones: duplicateKeyCounts(sourceOrders, (order) => normalizePhone(order.phone)),
+    addresses: duplicateKeyCounts(sourceOrders, (order) => normalizeAddress(order.address)),
+    nearby: duplicateNearbyOrders(sourceOrders),
+  };
+}
+
+function isPossibleDuplicate(order, signals) {
+  const customer = normalizeCustomerName(order.customer);
+  const phone = normalizePhone(order.phone);
+  const address = normalizeAddress(order.address);
+  const id = orderDuplicateId(order);
+
+  return (
+    (customer && (signals.names.get(customer) || 0) > 1) ||
+    (phone && (signals.phones.get(phone) || 0) > 1) ||
+    (address && (signals.addresses.get(address) || 0) > 1) ||
+    (id && signals.nearby.has(id))
+  );
+}
+
 function orderTypeLabel(order) {
   return isPickup(order) ? "Retirada" : "Entrega";
 }
@@ -125,6 +211,7 @@ function renderOrders() {
   const isEventsOpen = activeFilter === "events";
   const isDispatchedOpen = activeFilter === "dispatched";
   const activeOrders = [...orders].sort((a, b) => elapsedSeconds(b) - elapsedSeconds(a));
+  const duplicateInfo = duplicateSignals(activeOrders);
   const deliveryOrders = activeOrders.filter(isDelivery);
   const pickupOrders = activeOrders.filter(isPickup);
   const lateOrders = activeOrders.filter(isLate);
@@ -176,14 +263,16 @@ function renderOrders() {
     .map((order) => {
       const status = statusFor(order);
       const kdsStatus = kdsStatusFor(order);
+      const isDuplicate = isPossibleDuplicate(order, duplicateInfo);
 
       return `
-        <article class="order-row priority-${status.className}">
+        <article class="order-row priority-${status.className}${isDuplicate ? " has-duplicate-customer" : ""}">
           <div class="order-number">#${order.number}</div>
           <div class="service-badge ${isPickup(order) ? "pickup" : "delivery"}">${orderTypeLabel(order)}</div>
           <div class="order-info">
             <span class="mobile-label">Cliente</span>
             <strong>${order.customer}</strong>
+            ${isDuplicate ? '<span class="duplicate-alert">Possível duplicado</span>' : ""}
           </div>
           <div class="order-info">
             <span class="mobile-label">Bairro</span>

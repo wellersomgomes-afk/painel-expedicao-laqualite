@@ -324,6 +324,10 @@ h1 {
   background: rgba(255, 47, 47, 0.22);
 }
 
+.order-row.has-duplicate-customer {
+  box-shadow: inset 0 0 0 2px rgba(255, 207, 90, 0.75);
+}
+
 .order-row:last-child {
   border-bottom: 0;
 }
@@ -363,6 +367,19 @@ h1 {
   font-size: clamp(22px, 2vw, 32px);
   font-weight: 900;
   line-height: 1.05;
+}
+
+.duplicate-alert {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--warning);
+  color: #101318;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .mobile-label {
@@ -824,6 +841,12 @@ h1 {
   border-color: var(--ok);
 }
 
+.kds-order-card.has-duplicate-customer,
+.dispatch-card.has-duplicate-customer {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px rgba(255, 207, 90, 0.5), 0 12px 24px rgba(0, 0, 0, 0.24);
+}
+
 .dispatch-card {
   overflow: hidden;
   width: 250px;
@@ -850,6 +873,11 @@ h1 {
   display: grid;
   min-width: 0;
   gap: 4px;
+}
+
+.kds-duplicate-alert {
+  margin-top: 2px;
+  font-size: 11px;
 }
 
 .dispatch-main strong {
