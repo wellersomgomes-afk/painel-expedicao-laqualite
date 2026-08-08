@@ -12,6 +12,7 @@ const DISPATCHED_FILE = path.join(DATA_DIR, "dispatched-orders.json");
 const KDS_READY_FILE = path.join(DATA_DIR, "kds-ready-orders.json");
 const PDV_PRODUCT_SECTORS_FILE = path.join(DATA_DIR, "pdv-product-sectors.json");
 const CATEGORY_SECTORS_FILE = path.join(DATA_DIR, "category-sectors.json");
+const DRIVERS_FILE = path.join(DATA_DIR, "drivers.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
@@ -63,6 +64,10 @@ function ensureDataFile() {
   if (!fs.existsSync(CATEGORY_SECTORS_FILE)) {
     fs.writeFileSync(CATEGORY_SECTORS_FILE, JSON.stringify({ esfihas: [], porcoes: [] }, null, 2));
   }
+
+  if (!fs.existsSync(DRIVERS_FILE)) {
+    fs.writeFileSync(DRIVERS_FILE, JSON.stringify([], null, 2));
+  }
 }
 
 function readOrders() {
@@ -112,6 +117,75 @@ function writeEvents(events) {
 function readDispatchedOrders() {
   ensureDataFile();
   return readJsonFile(DISPATCHED_FILE);
+}
+
+function readDrivers() {
+  ensureDataFile();
+  return readJsonFile(DRIVERS_FILE);
+}
+
+function writeDrivers(drivers) {
+  ensureDataFile();
+  fs.writeFileSync(DRIVERS_FILE, JSON.stringify(drivers, null, 2));
+}
+
+function normalizeDriverName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function saveDriver(payload) {
+  const name = normalizeDriverName(payload.name);
+
+  if (!name) {
+    return { ok: false, message: "Informe o nome do motoboy." };
+  }
+
+  const drivers = readDrivers();
+  const duplicate = drivers.some((driver) => normalizeText(driver.name) === normalizeText(name));
+
+  if (duplicate) {
+    return { ok: false, message: "Motoboy ja cadastrado." };
+  }
+
+  const driver = {
+    id: String(Date.now()),
+    name,
+    createdAt: Date.now(),
+  };
+
+  drivers.push(driver);
+  writeDrivers(drivers.sort((left, right) => left.name.localeCompare(right.name, "pt-BR")));
+
+  return { ok: true, driver };
+}
+
+function removeDriver(payload) {
+  const driverId = String(payload.id || "");
+  const drivers = readDrivers();
+  const nextDrivers = drivers.filter((driver) => String(driver.id) !== driverId);
+
+  if (nextDrivers.length === drivers.length) {
+    return { ok: false, message: "Motoboy nao encontrado." };
+  }
+
+  writeDrivers(nextDrivers);
+  return { ok: true };
+}
+
+function driverFromPayload(payload) {
+  const driverId = String(payload.driverId || "");
+  const driverName = normalizeDriverName(payload.driverName);
+  const driver = readDrivers().find((item) => String(item.id) === driverId);
+
+  if (driver) {
+    return { id: driver.id, name: driver.name };
+  }
+
+  if (driverName) {
+    return { id: driverId, name: driverName };
+  }
+
+  return null;
 }
 
 function normalizePdvCode(value) {
@@ -376,6 +450,8 @@ function recordDispatchedOrder(order, payload) {
         : order.neighborhood,
     city: order.fulfillmentType === "pickup" ? "" : order.city || "",
     eventType: payload.eventType || payload.action || "",
+    driverId: payload.driver?.id || "",
+    driverName: payload.driver?.name || "",
     dispatchedAt: Date.now(),
   };
   const withoutDuplicate = dispatchedOrders.filter((item) =>
@@ -456,9 +532,17 @@ async function dispatchKdsReadyOrder(target) {
 
   const action = target.action === "pickup-ready" ? "pickup-ready" : "dispatch";
   const eventType = action === "pickup-ready" ? "READY_FOR_PICKUP" : "DISPATCHED";
+  const driver = action === "dispatch" ? driverFromPayload(target) : null;
+
+  if (action === "dispatch" && !driver) {
+    return { ok: false, message: "Selecione um motoboy para despachar a entrega." };
+  }
 
   const cardapioResult = await notifyCardapioDispatchSafely(order, action);
-  recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-dispatch", action }, cardapioResult);
+  recordSystemEvent(
+    { order: order.number, orderId: order.orderId, source: "kds-dispatch", action, driverName: driver?.name || "" },
+    cardapioResult
+  );
 
   if (!cardapioResult.ok) {
     return {
@@ -473,7 +557,7 @@ async function dispatchKdsReadyOrder(target) {
   orders.splice(orderIndex, 1);
   writeOrders(orders);
   removeKdsReadyOrder(order);
-  recordDispatchedOrder(order, { action, eventType });
+  recordDispatchedOrder(order, { action, eventType, driver });
 
   return {
     ok: true,
@@ -2236,7 +2320,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -2262,6 +2346,33 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/dispatched-orders") {
     sendJson(response, 200, { orders: readDispatchedOrders() });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/drivers") {
+    sendJson(response, 200, { drivers: readDrivers() });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/drivers") {
+    try {
+      const body = await readBody(request);
+      const result = saveDriver(body);
+      sendJson(response, result.ok ? 200 : 400, result);
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: "Motoboy invalido." });
+    }
+    return;
+  }
+
+  if (request.method === "DELETE" && url.pathname === "/api/drivers") {
+    try {
+      const body = await readBody(request);
+      const result = removeDriver(body);
+      sendJson(response, result.ok ? 200 : 404, result);
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: "Motoboy invalido." });
+    }
     return;
   }
 

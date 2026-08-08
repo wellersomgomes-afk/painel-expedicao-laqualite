@@ -2,6 +2,7 @@ let board = {
   updatedAt: "--:--",
   productionOrders: [],
   readyOrders: [],
+  dispatchedOrders: [],
 };
 
 const productionCount = document.querySelector("#kds-production-count");
@@ -19,8 +20,13 @@ const settingsButton = document.querySelector("#kds-settings-button");
 const settingsPanel = document.querySelector("#kds-settings-panel");
 const searchInput = document.querySelector("#kds-search-input");
 const searchClearButton = document.querySelector("#kds-search-clear");
+const driverForm = document.querySelector("#driver-form");
+const driverNameInput = document.querySelector("#driver-name-input");
+const driverList = document.querySelector("#driver-list");
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const DUPLICATE_TIME_WINDOW_MINUTES = 10;
+let drivers = [];
+let selectedDriverId = localStorage.getItem("kdsSelectedDriverId") || "";
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
 let activeView = localStorage.getItem("kdsActiveView") || "production";
 let activeSector = localStorage.getItem("kdsActiveSector") || "pizzas";
@@ -110,6 +116,96 @@ function orderDuplicateId(order) {
 
 function dispatchSelectionId(order) {
   return orderDuplicateId(order);
+}
+
+function selectedDriver() {
+  return drivers.find((driver) => String(driver.id) === String(selectedDriverId)) || null;
+}
+
+function renderDriverOptions() {
+  return [
+    '<option value="">Selecione o motoboy</option>',
+    ...drivers.map((driver) => `<option value="${driver.id}" ${String(driver.id) === String(selectedDriverId) ? "selected" : ""}>${driver.name}</option>`),
+  ].join("");
+}
+
+function renderDriverList() {
+  if (!driverList) {
+    return;
+  }
+
+  if (drivers.length === 0) {
+    driverList.innerHTML = '<span class="driver-empty">Nenhum motoboy cadastrado.</span>';
+    return;
+  }
+
+  driverList.innerHTML = drivers.map((driver) => `
+    <div class="driver-list-item">
+      <strong>${driver.name}</strong>
+      <button type="button" data-driver-id="${driver.id}">Remover</button>
+    </div>
+  `).join("");
+}
+
+function chooseDriverForDispatch() {
+  return new Promise((resolve) => {
+    if (drivers.length === 0) {
+      alert("Cadastre um motoboy nas configuracoes antes de despachar.");
+      resolve(null);
+      return;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "driver-modal-overlay";
+    overlay.innerHTML = `
+      <section class="driver-modal" role="dialog" aria-modal="true" aria-label="Selecionar motoboy">
+        <header>
+          <strong>Selecionar motoboy</strong>
+          <button class="driver-modal-close" type="button" aria-label="Fechar">x</button>
+        </header>
+        <label>
+          <span>Motoboy</span>
+          <select class="driver-modal-select">
+            ${renderDriverOptions()}
+          </select>
+        </label>
+        <div class="driver-modal-actions">
+          <button class="driver-modal-cancel" type="button">Cancelar</button>
+          <button class="driver-modal-confirm" type="button">Confirmar despacho</button>
+        </div>
+      </section>
+    `;
+
+    const select = overlay.querySelector(".driver-modal-select");
+    const close = () => {
+      overlay.remove();
+      resolve(null);
+    };
+
+    overlay.querySelector(".driver-modal-close").addEventListener("click", close);
+    overlay.querySelector(".driver-modal-cancel").addEventListener("click", close);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        close();
+      }
+    });
+    overlay.querySelector(".driver-modal-confirm").addEventListener("click", () => {
+      const driver = drivers.find((item) => String(item.id) === String(select.value));
+
+      if (!driver) {
+        alert("Selecione um motoboy.");
+        return;
+      }
+
+      selectedDriverId = driver.id;
+      localStorage.setItem("kdsSelectedDriverId", selectedDriverId);
+      overlay.remove();
+      resolve(driver);
+    });
+
+    document.body.appendChild(overlay);
+    select.focus();
+  });
 }
 
 function duplicateNearbyOrders(sourceOrders) {
@@ -449,6 +545,50 @@ function renderDispatchOrder(order, duplicateInfo = duplicateSignals([])) {
   `;
 }
 
+function formatDispatchedTime(order) {
+  if (!order.dispatchedAt) {
+    return "";
+  }
+
+  return new Date(Number(order.dispatchedAt)).toLocaleTimeString("pt-BR", {
+    timeZone: APP_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderDispatchedOrder(order) {
+  const isPickup = isPickupOrder(order);
+  const service = isPickup ? "Retirada" : "Entrega";
+  const location = isPickup ? "Balcao" : order.neighborhood || "Bairro nao informado";
+
+  return `
+    <article class="dispatch-card dispatched-kds-card">
+      <header class="dispatch-card-head">
+        <div class="dispatch-main">
+          <strong>#${order.number}</strong>
+          <span>${order.customer || "Nao informado"}</span>
+        </div>
+        <div class="dispatch-time">${formatDispatchedTime(order)}</div>
+      </header>
+      <div class="dispatched-kds-body">
+        <div>
+          <span>Tipo</span>
+          <strong>${service}</strong>
+        </div>
+        <div>
+          <span>Local</span>
+          <strong>${location}</strong>
+        </div>
+        <div>
+          <span>Motoboy</span>
+          <strong>${order.driverName || (isPickup ? "Retirada" : "Nao informado")}</strong>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
 function isPickupOrder(order) {
   return order.fulfillmentType === "pickup";
 }
@@ -569,20 +709,34 @@ async function toggleFullscreen() {
 
 function currentOrders() {
   const dispatchMode = isDispatchMode();
-  const sourceOrders = activeView === "ready" || dispatchMode ? board.readyOrders : board.productionOrders;
+  const dispatchedMode = dispatchMode && activeService === "dispatched";
+  const sourceOrders = dispatchMode && activeService === "dispatched"
+    ? board.dispatchedOrders
+    : activeView === "ready" || dispatchMode
+      ? board.readyOrders
+      : board.productionOrders;
   const searchValue = searchOrderNumber.trim();
 
   return sourceOrders
-    .filter((order) => !dispatchMode || order.readyAt)
+    .filter((order) => !dispatchMode || activeService === "dispatched" || order.readyAt)
     .filter((order) => !searchValue || String(order.number || "").includes(searchValue))
     .filter((order) =>
       activeService === "both" ||
+      activeService === "dispatched" ||
       (activeService === "pickup" && isPickupOrder(order)) ||
       (activeService === "delivery" && !isPickupOrder(order))
     )
-    .map((order) => dispatchMode ? filterOrderForDispatch(order) : filterOrderForSector(order))
+    .map((order) => {
+      if (dispatchMode && activeService === "dispatched") {
+        return order;
+      }
+
+      return dispatchMode ? filterOrderForDispatch(order) : filterOrderForSector(order);
+    })
     .filter(Boolean)
-    .sort((left, right) => Number(left.number || 0) - Number(right.number || 0));
+    .sort((left, right) => dispatchedMode
+      ? Number(right.dispatchedAt || 0) - Number(left.dispatchedAt || 0)
+      : Number(left.number || 0) - Number(right.number || 0));
 }
 
 function ordersForSummary(sourceOrders, { dispatchMode = false } = {}) {
@@ -590,6 +744,7 @@ function ordersForSummary(sourceOrders, { dispatchMode = false } = {}) {
     .filter((order) => !dispatchMode || order.readyAt)
     .filter((order) =>
       activeService === "both" ||
+      activeService === "dispatched" ||
       (activeService === "pickup" && isPickupOrder(order)) ||
       (activeService === "delivery" && !isPickupOrder(order))
     )
@@ -629,7 +784,9 @@ function renderKds() {
   const orders = currentOrders();
   const duplicateInfo = duplicateSignals(orders);
   const productionSummaryOrders = ordersForSummary(board.productionOrders, { dispatchMode: false });
-  const readySummaryOrders = ordersForSummary(board.readyOrders, { dispatchMode });
+  const readySummaryOrders = dispatchMode && activeService === "dispatched"
+    ? board.dispatchedOrders
+    : ordersForSummary(board.readyOrders, { dispatchMode });
 
   if (searchInput && searchInput.value !== searchOrderNumber) {
     searchInput.value = searchOrderNumber;
@@ -637,9 +794,16 @@ function renderKds() {
 
   productionCount.textContent = String(productionSummaryOrders.length);
   readyCount.textContent = String(readySummaryOrders.length);
-  averageTime.textContent = averagePreparationTime(readySummaryOrders);
+  averageTime.textContent = dispatchMode && activeService === "dispatched"
+    ? "--:--"
+    : averagePreparationTime(readySummaryOrders);
 
   if (orders.length === 0) {
+    if (dispatchMode && activeService === "dispatched") {
+      grid.innerHTML = '<div class="empty kds-empty">Nenhum pedido despachado ainda.</div>';
+      return;
+    }
+
     grid.innerHTML = searchOrderNumber
       ? `<div class="empty kds-empty">Nenhum pedido encontrado com o número ${searchOrderNumber}.</div>`
       : dispatchMode
@@ -651,6 +815,11 @@ function renderKds() {
   }
 
   if (dispatchMode) {
+    if (activeService === "dispatched") {
+      grid.innerHTML = renderOrderSection("Despachados", orders, renderDispatchedOrder, duplicateInfo);
+      return;
+    }
+
     if (activeService === "both") {
       grid.innerHTML = renderOrderSection("Despacho", orders, renderDispatchOrder, duplicateInfo);
       return;
@@ -672,18 +841,21 @@ function renderKds() {
 
 async function loadKdsOrders() {
   try {
-    const [productionResponse, readyResponse] = await Promise.all([
+    const [productionResponse, readyResponse, dispatchedResponse] = await Promise.all([
       fetch(shouldSyncOnNextKdsLoad ? "/api/kds-orders?sync=1" : "/api/kds-orders"),
       fetch("/api/kds-ready-orders"),
+      fetch("/api/dispatched-orders"),
     ]);
     shouldSyncOnNextKdsLoad = false;
     const productionData = await productionResponse.json();
     const readyData = await readyResponse.json();
+    const dispatchedData = await dispatchedResponse.json();
 
     board = {
       updatedAt: productionData.updatedAt || readyData.updatedAt || "--:--",
       productionOrders: Array.isArray(productionData.orders) ? productionData.orders : [],
       readyOrders: Array.isArray(readyData.orders) ? readyData.orders : [],
+      dispatchedOrders: Array.isArray(dispatchedData.orders) ? dispatchedData.orders : [],
     };
   } catch (error) {
     shouldSyncOnNextKdsLoad = false;
@@ -691,6 +863,7 @@ async function loadKdsOrders() {
       updatedAt: "--:--",
       productionOrders: [],
       readyOrders: [],
+      dispatchedOrders: [],
     };
   }
 
@@ -723,6 +896,60 @@ async function markOrderReady(button) {
   }
 }
 
+async function loadDrivers() {
+  try {
+    const response = await fetch("/api/drivers");
+    const data = await response.json();
+    drivers = Array.isArray(data.drivers) ? data.drivers : [];
+
+    if (selectedDriverId && !selectedDriver()) {
+      selectedDriverId = "";
+      localStorage.removeItem("kdsSelectedDriverId");
+    }
+
+    renderDriverList();
+    renderKds();
+  } catch (error) {
+    drivers = [];
+    renderDriverList();
+  }
+}
+
+async function addDriver(name) {
+  const response = await fetch("/api/drivers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.message || "Nao foi possivel cadastrar o motoboy.");
+  }
+
+  await loadDrivers();
+}
+
+async function deleteDriver(driverId) {
+  const response = await fetch("/api/drivers", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: driverId }),
+  });
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.message || "Nao foi possivel remover o motoboy.");
+  }
+
+  if (String(selectedDriverId) === String(driverId)) {
+    selectedDriverId = "";
+    localStorage.removeItem("kdsSelectedDriverId");
+  }
+
+  await loadDrivers();
+}
+
 async function markItemReady(button) {
   button.disabled = true;
   button.textContent = "Salvando...";
@@ -750,6 +977,12 @@ async function markItemReady(button) {
 }
 
 async function dispatchReadyOrder(button) {
+  const driver = button.dataset.action === "dispatch" ? await chooseDriverForDispatch() : null;
+
+  if (button.dataset.action === "dispatch" && !driver) {
+    return;
+  }
+
   button.disabled = true;
   button.textContent = "Salvando...";
 
@@ -761,6 +994,8 @@ async function dispatchReadyOrder(button) {
         number: button.dataset.number,
         orderId: button.dataset.orderId,
         action: button.dataset.action,
+        driverId: driver?.id || "",
+        driverName: driver?.name || "",
       }),
     });
     const result = await response.json().catch(() => ({}));
@@ -778,6 +1013,12 @@ async function dispatchReadyOrder(button) {
 }
 
 async function dispatchSelectedOrders(button) {
+  const driver = await chooseDriverForDispatch();
+
+  if (!driver) {
+    return;
+  }
+
   const selectedIds = new Set(selectedDispatchOrders);
   const selectedOrders = currentOrders()
     .filter((order) => !isPickupOrder(order))
@@ -801,6 +1042,8 @@ async function dispatchSelectedOrders(button) {
           number: order.number,
           orderId: order.orderId || "",
           action: "dispatch",
+          driverId: driver.id,
+          driverName: driver.name,
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -846,6 +1089,9 @@ productTabs.forEach((button) => {
     if (activeSector === "dispatch") {
       activeView = "ready";
       localStorage.setItem("kdsActiveView", activeView);
+    } else if (activeService === "dispatched") {
+      activeService = "both";
+      localStorage.setItem("kdsActiveService", activeService);
     }
     renderKds();
   });
@@ -855,6 +1101,12 @@ serviceTabs.forEach((button) => {
   button.addEventListener("click", () => {
     activeService = button.dataset.service;
     localStorage.setItem("kdsActiveService", activeService);
+    if (activeService === "dispatched") {
+      activeSector = "dispatch";
+      activeView = "ready";
+      localStorage.setItem("kdsActiveSector", activeSector);
+      localStorage.setItem("kdsActiveView", activeView);
+    }
     selectedDispatchOrders.clear();
     renderKds();
   });
@@ -921,6 +1173,39 @@ if (searchClearButton) {
       searchInput.focus();
     }
     renderKds();
+  });
+}
+
+if (driverForm) {
+  driverForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = driverNameInput?.value || "";
+
+    try {
+      await addDriver(name);
+      if (driverNameInput) {
+        driverNameInput.value = "";
+        driverNameInput.focus();
+      }
+    } catch (error) {
+      alert(error.message || "Nao foi possivel cadastrar o motoboy.");
+    }
+  });
+}
+
+if (driverList) {
+  driverList.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-driver-id]");
+
+    if (!button) {
+      return;
+    }
+
+    try {
+      await deleteDriver(button.dataset.driverId);
+    } catch (error) {
+      alert(error.message || "Nao foi possivel remover o motoboy.");
+    }
   });
 }
 
@@ -991,5 +1276,6 @@ applyMenuVisibility();
 setSettingsOpen(false);
 updateFullscreenButton();
 loadKdsOrders();
+loadDrivers();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);

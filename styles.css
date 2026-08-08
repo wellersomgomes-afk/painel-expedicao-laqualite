@@ -275,6 +275,7 @@ h1 {
     minmax(170px, 1fr)
     minmax(150px, 0.9fr)
     minmax(150px, 0.9fr)
+    minmax(150px, 0.85fr)
     minmax(190px, 0.9fr);
 }
 
@@ -658,6 +659,102 @@ h1 {
   justify-content: center;
 }
 
+.driver-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.driver-form input {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #101721;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.driver-form input {
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.driver-form button,
+.driver-list-item button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef1f5;
+  color: #101318;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.driver-form button {
+  padding: 0 10px;
+}
+
+.driver-list {
+  max-height: 255px;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  padding-right: 4px;
+  scrollbar-color: #465061 #101721;
+  scrollbar-width: thin;
+}
+
+.driver-list::-webkit-scrollbar {
+  width: 9px;
+}
+
+.driver-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #101721;
+}
+
+.driver-list::-webkit-scrollbar-thumb {
+  border: 2px solid #101721;
+  border-radius: 999px;
+  background: #465061;
+}
+
+.driver-list::-webkit-scrollbar-thumb:hover {
+  background: #5b6676;
+}
+
+.driver-empty {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.driver-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.driver-list-item strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.driver-list-item button {
+  flex: 0 0 auto;
+  padding: 0 8px;
+}
+
 .kds-size-control {
   display: flex;
   gap: 6px;
@@ -730,7 +827,7 @@ h1 {
 }
 
 .kds-service-tabs {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .kds-view-tab,
@@ -959,6 +1056,100 @@ h1 {
   opacity: 0.55;
 }
 
+.driver-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(7, 10, 14, 0.72);
+}
+
+.driver-modal {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #465061;
+  border-radius: 10px;
+  background: #1b222c;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+}
+
+.driver-modal header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.driver-modal header strong {
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.driver-modal-close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef1f5;
+  color: #101318;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.driver-modal label {
+  display: grid;
+  gap: 6px;
+}
+
+.driver-modal label span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.driver-modal-select {
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101721;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.driver-modal-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 10px;
+}
+
+.driver-modal-actions button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.driver-modal-cancel {
+  background: #2a3442;
+  color: var(--text);
+}
+
+.driver-modal-confirm {
+  background: #78a2f8;
+  color: #101318;
+}
+
 .kds-duplicate-alert {
   margin-top: 2px;
   font-size: 11px;
@@ -1049,6 +1240,43 @@ h1 {
   font-size: 13px;
   font-weight: 800;
   line-height: 1.2;
+}
+
+.dispatched-kds-card .dispatch-card-head {
+  background: #e8edf3;
+  color: #243242;
+}
+
+.dispatched-kds-card .dispatch-main span {
+  color: #526174;
+}
+
+.dispatched-kds-body {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.dispatched-kds-body div {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #f4f6f8;
+}
+
+.dispatched-kds-body span {
+  color: #526174;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dispatched-kds-body strong {
+  overflow-wrap: anywhere;
+  color: #101318;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .kds-ready-button {

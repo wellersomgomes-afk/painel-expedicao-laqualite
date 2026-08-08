@@ -322,6 +322,10 @@ function renderDispatchedOrders() {
           <span class="mobile-label">Cidade</span>
           <strong>${displayCity(order)}</strong>
         </div>
+        <div class="order-info">
+          <span class="mobile-label">Motoboy</span>
+          <strong>${order.driverName || ""}</strong>
+        </div>
         <div class="status ok">Despachado ${formatDispatchedTime(order)}</div>
       </article>
     `)

@@ -46,7 +46,16 @@
                   <button class="kds-service-tab active" type="button" data-service="both">Entrega / Retirada</button>
                   <button class="kds-service-tab" type="button" data-service="delivery">Entrega</button>
                   <button class="kds-service-tab" type="button" data-service="pickup">Retirada</button>
+                  <button class="kds-service-tab" type="button" data-service="dispatched">Despachados</button>
                 </nav>
+              </div>
+              <div class="kds-settings-group">
+                <span>Motoboys</span>
+                <form class="driver-form" id="driver-form">
+                  <input id="driver-name-input" type="text" autocomplete="off" placeholder="Nome do motoboy" />
+                  <button type="submit">Cadastrar</button>
+                </form>
+                <div class="driver-list" id="driver-list"></div>
               </div>
               <button class="kds-fullscreen-button" id="kds-fullscreen-button" type="button">Tela cheia</button>
               <a class="panel-link" href="/">Expedicao</a>
@@ -94,6 +103,7 @@
         <button class="kds-service-tab active" type="button" data-service="both">Entrega / Retirada</button>
         <button class="kds-service-tab" type="button" data-service="delivery">Entrega</button>
         <button class="kds-service-tab" type="button" data-service="pickup">Retirada</button>
+        <button class="kds-service-tab" type="button" data-service="dispatched">Despachados</button>
       </nav>
 
       <section class="kds-grid" id="kds-grid" aria-label="Produtos em producao"></section>
