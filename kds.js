@@ -90,10 +90,10 @@ function isPizzaItem(item) {
 
 function itemSearchText(item) {
   const complements = (item.complements || [])
-    .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${complement.searchText || ""}`)
+    .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${(complement.categoryIds || []).join(" ")} ${complement.searchText || ""}`)
     .join(" ");
 
-  return normalizeText(`${item.category || ""} ${item.name || ""} ${(item.pdvCodes || []).join(" ")} ${item.description || ""} ${item.notes || ""} ${item.searchText || ""} ${complements}`);
+  return normalizeText(`${item.category || ""} ${item.name || ""} ${(item.pdvCodes || []).join(" ")} ${(item.categoryIds || []).join(" ")} ${item.description || ""} ${item.notes || ""} ${item.searchText || ""} ${complements}`);
 }
 
 function hasAnyTerm(text, terms) {

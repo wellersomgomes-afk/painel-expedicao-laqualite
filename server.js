@@ -11,6 +11,7 @@ const EVENTS_FILE = path.join(DATA_DIR, "events.json");
 const DISPATCHED_FILE = path.join(DATA_DIR, "dispatched-orders.json");
 const KDS_READY_FILE = path.join(DATA_DIR, "kds-ready-orders.json");
 const PDV_PRODUCT_SECTORS_FILE = path.join(DATA_DIR, "pdv-product-sectors.json");
+const CATEGORY_SECTORS_FILE = path.join(DATA_DIR, "category-sectors.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
@@ -57,6 +58,10 @@ function ensureDataFile() {
 
   if (!fs.existsSync(PDV_PRODUCT_SECTORS_FILE)) {
     fs.writeFileSync(PDV_PRODUCT_SECTORS_FILE, JSON.stringify({ esfihas: [], porcoes: [] }, null, 2));
+  }
+
+  if (!fs.existsSync(CATEGORY_SECTORS_FILE)) {
+    fs.writeFileSync(CATEGORY_SECTORS_FILE, JSON.stringify({ esfihas: [], porcoes: [] }, null, 2));
   }
 }
 
@@ -113,6 +118,10 @@ function normalizePdvCode(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function normalizeExternalId(value) {
+  return String(value || "").trim();
+}
+
 function readPdvProductSectors() {
   ensureDataFile();
 
@@ -122,6 +131,24 @@ function readPdvProductSectors() {
     return {
       esfihas: new Set((configured.esfihas || []).map(normalizePdvCode).filter(Boolean)),
       porcoes: new Set((configured.porcoes || []).map(normalizePdvCode).filter(Boolean)),
+    };
+  } catch (error) {
+    return {
+      esfihas: new Set(),
+      porcoes: new Set(),
+    };
+  }
+}
+
+function readCategorySectors() {
+  ensureDataFile();
+
+  try {
+    const configured = readJsonFile(CATEGORY_SECTORS_FILE);
+
+    return {
+      esfihas: new Set((configured.esfihas || []).map(normalizeExternalId).filter(Boolean)),
+      porcoes: new Set((configured.porcoes || []).map(normalizeExternalId).filter(Boolean)),
     };
   } catch (error) {
     return {
@@ -143,6 +170,25 @@ function sectorsFromPdvCodes(codes) {
     }
 
     if (pdvMap.porcoes.has(normalizedCode)) {
+      sectors.add("porcoes");
+    }
+  }
+
+  return [...sectors];
+}
+
+function sectorsFromCategoryIds(categoryIds) {
+  const categoryMap = readCategorySectors();
+  const sectors = new Set();
+
+  for (const categoryId of categoryIds || []) {
+    const normalizedCategoryId = normalizeExternalId(categoryId);
+
+    if (categoryMap.esfihas.has(normalizedCategoryId)) {
+      sectors.add("esfihas");
+    }
+
+    if (categoryMap.porcoes.has(normalizedCategoryId)) {
       sectors.add("porcoes");
     }
   }
@@ -708,6 +754,80 @@ function findItemArray(source) {
   return [];
 }
 
+function categoryIdsFromItem(item) {
+  const values = [
+    getDeepValue(item, [
+      "categoryIds",
+      "categoryIDs",
+      "category_ids",
+      "categoriesIds",
+      "categories_ids",
+      "categories.id",
+      "categories.uuid",
+      "product.categoryIds",
+      "product.category_ids",
+      "product.categories.id",
+      "item.categoryIds",
+      "item.category_ids",
+      "item.categories.id",
+    ]),
+    getDeepValue(item, [
+      "categoryId",
+      "categoryID",
+      "category_id",
+      "category.id",
+      "category.uuid",
+      "category.code",
+      "groupId",
+      "group_id",
+      "group.id",
+      "sectionId",
+      "section_id",
+      "section.id",
+      "product.categoryId",
+      "product.categoryID",
+      "product.category_id",
+      "product.category.id",
+      "product.groupId",
+      "product.group_id",
+      "productCategoryId",
+      "product_category_id",
+      "item.categoryId",
+      "item.category_id",
+      "item.category.id",
+      "produto.categoria.id",
+    ]),
+    findValueByKeyNames(item, [
+      "categoryIds",
+      "categoryIDs",
+      "category_ids",
+      "categoriesIds",
+      "categories_ids",
+      "categoryId",
+      "categoryID",
+      "category_id",
+    ]),
+  ];
+
+  return [...new Set(values.flatMap((value) => {
+    if (!value) {
+      return [];
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((itemValue) => {
+        if (itemValue && typeof itemValue === "object") {
+          return getDeepValue(itemValue, ["id", "uuid", "code", "categoryId", "category_id"]) || "";
+        }
+
+        return itemValue;
+      });
+    }
+
+    return [value];
+  }).map(normalizeExternalId).filter(Boolean))];
+}
+
 function categoryIdFromItem(item) {
   const categoryId = getDeepValue(item, [
     "categoryId",
@@ -797,6 +917,28 @@ function pdvCodesFromItem(item) {
       "product.codigo_pdv",
       "item.pdvCode",
       "item.pdv_code",
+      "code",
+      "codigo",
+      "product.code",
+      "product.codigo",
+      "item.code",
+      "item.codigo",
+      "option.code",
+      "option.codigo",
+      "option.product.code",
+      "option.product.codigo",
+      "posCode",
+      "pos_code",
+      "product.posCode",
+      "product.pos_code",
+      "item.posCode",
+      "item.pos_code",
+      "plu",
+      "PLU",
+      "product.plu",
+      "product.PLU",
+      "item.plu",
+      "item.PLU",
       "sku",
       "SKU",
       "product.sku",
@@ -829,6 +971,12 @@ function pdvCodesFromItem(item) {
       "codigoPdv",
       "codigoPDV",
       "codigo_pdv",
+      "code",
+      "codigo",
+      "posCode",
+      "pos_code",
+      "plu",
+      "PLU",
       "sku",
       "productCode",
       "product_code",
@@ -867,6 +1015,7 @@ function normalizeOrderItems(order) {
       const category = categoryTextFromItem(item, categoryLookup);
       const complements = normalizeComplements(item);
       const pdvCodes = pdvCodesFromItem(item);
+      const categoryIds = categoryIdsFromItem(item);
       const normalizedItem = {
         name,
         quantity: toNumber(getDeepValue(item, [
@@ -880,6 +1029,7 @@ function normalizeOrderItems(order) {
         notes: extractNoteText(item),
         complements,
         pdvCodes,
+        categoryIds,
         searchText: searchTextFromValue(item),
       };
 
@@ -1012,6 +1162,7 @@ function normalizeComplements(item) {
             quantity: toNumber(getDeepValue(nestedItem, ["quantity", "qty", "amount", "count"]), 1),
             category: categoryTextFromItem(nestedItem, new Map()),
             pdvCodes: pdvCodesFromItem(nestedItem),
+            categoryIds: categoryIdsFromItem(nestedItem),
             searchText: searchTextFromValue(nestedItem),
           });
         }
@@ -1033,6 +1184,7 @@ function normalizeComplements(item) {
         quantity: toNumber(getDeepValue(complement, ["quantity", "qty", "amount", "count"]), 1),
         category: categoryTextFromItem(complement, new Map()),
         pdvCodes: pdvCodesFromItem(complement),
+        categoryIds: categoryIdsFromItem(complement),
         searchText: searchTextFromValue(complement),
       });
     }
@@ -1495,10 +1647,10 @@ function normalizeText(value) {
 
 function itemSearchText(item) {
   const complements = (item.complements || [])
-    .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${complement.searchText || ""}`)
+    .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${(complement.categoryIds || []).join(" ")} ${complement.searchText || ""}`)
     .join(" ");
 
-  return normalizeText(`${item.category || ""} ${item.name || ""} ${(item.pdvCodes || []).join(" ")} ${item.description || ""} ${item.notes || ""} ${item.searchText || ""} ${complements}`);
+  return normalizeText(`${item.category || ""} ${item.name || ""} ${(item.pdvCodes || []).join(" ")} ${(item.categoryIds || []).join(" ")} ${item.description || ""} ${item.notes || ""} ${item.searchText || ""} ${complements}`);
 }
 
 function hasAnyTerm(text, terms) {
@@ -1529,8 +1681,16 @@ function sectorKeysForItem(item) {
     ...(item.pdvCodes || []),
     ...(item.complements || []).flatMap((complement) => complement.pdvCodes || []),
   ];
+  const categoryIds = [
+    ...(item.categoryIds || []),
+    ...(item.complements || []).flatMap((complement) => complement.categoryIds || []),
+  ];
 
   for (const sector of sectorsFromPdvCodes(pdvCodes)) {
+    sectors.add(sector);
+  }
+
+  for (const sector of sectorsFromCategoryIds(categoryIds)) {
     sectors.add(sector);
   }
 
@@ -1732,8 +1892,11 @@ function buildKdsDebug() {
       name: item.name,
       category: item.category || "",
       pdvCodes: item.pdvCodes || [],
+      categoryIds: item.categoryIds || [],
       sectors: sectorKeysForItem(item),
       classification: classifyProductionItem(item).key,
+      itemKeys: Object.keys(item || {}).sort(),
+      productKeys: item.product && typeof item.product === "object" ? Object.keys(item.product).sort() : [],
       searchText: itemSearchText(item).slice(0, 300),
     })),
   }));
