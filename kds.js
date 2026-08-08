@@ -101,7 +101,7 @@ function hasAnyTerm(text, terms) {
 }
 
 function sectorFromCategory(categoryText) {
-  if (hasAnyTerm(categoryText, ["porcao", "porcoes", "porc"])) {
+  if (hasAnyTerm(categoryText, ["porcao", "porcoes", "porc", "suco", "sucos"])) {
     return "porcoes";
   }
 
@@ -133,7 +133,7 @@ function sectorForItem(item) {
     return "esfihas";
   }
 
-  if (hasAnyTerm(text, ["porcao", "porcoes", "porc", "fritas", "batata", "mandioca", "onion", "aneis", "anel de cebola"])) {
+  if (hasAnyTerm(text, ["porcao", "porcoes", "porc", "fritas", "batata", "mandioca", "onion", "aneis", "anel de cebola", "suco", "sucos"])) {
     return "porcoes";
   }
 
