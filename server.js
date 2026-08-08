@@ -513,6 +513,56 @@ function textFromValue(value) {
   return "";
 }
 
+function categoryNameFromObject(value) {
+  return textFromValue(getDeepValue(value, [
+    "category.name",
+    "categoryName",
+    "category_name",
+    "categoryTitle",
+    "category_title",
+    "productCategoryName",
+    "product_category_name",
+    "parentCategoryName",
+    "parent_category_name",
+    "name",
+    "title",
+    "description",
+    "label",
+    "nome",
+  ]));
+}
+
+function buildCategoryLookup(source) {
+  const categories = new Map();
+  const queue = [source];
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (!current || typeof current !== "object" || seen.has(current)) {
+      continue;
+    }
+
+    seen.add(current);
+
+    const id = getDeepValue(current, ["id", "categoryId", "categoryID", "uuid", "code", "codigo"]);
+    const name = categoryNameFromObject(current);
+
+    if (id && name && sectorFromCategory(normalizeText(name))) {
+      categories.set(String(id), name);
+    }
+
+    for (const value of Object.values(current)) {
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
+  }
+
+  return categories;
+}
+
 function firstArray(source, paths) {
   for (const currentPath of paths) {
     const value = currentPath.split(".").reduce((current, key) => current?.[key], source);
@@ -589,7 +639,83 @@ function findItemArray(source) {
   return [];
 }
 
+function categoryIdFromItem(item) {
+  const categoryId = getDeepValue(item, [
+    "categoryId",
+    "categoryID",
+    "category_id",
+    "category.id",
+    "category.uuid",
+    "category.code",
+    "groupId",
+    "group_id",
+    "group.id",
+    "sectionId",
+    "section_id",
+    "section.id",
+    "product.categoryId",
+    "product.categoryID",
+    "product.category_id",
+    "product.category.id",
+    "product.groupId",
+    "product.group_id",
+    "productCategoryId",
+    "product_category_id",
+    "item.categoryId",
+    "item.category_id",
+    "item.category.id",
+    "produto.categoria.id",
+  ]);
+
+  return categoryId ? String(categoryId) : "";
+}
+
+function categoryTextFromItem(item, categoryLookup) {
+  const directCategory = textFromValue(getDeepValue(item, [
+    "category.name",
+    "category",
+    "categoryName",
+    "category_name",
+    "categoryTitle",
+    "category_title",
+    "categories",
+    "categories.name",
+    "section.name",
+    "section",
+    "sector.name",
+    "sector",
+    "department.name",
+    "department",
+    "group.name",
+    "group",
+    "product.category.name",
+    "product.category",
+    "product.categoryName",
+    "product.category_name",
+    "productCategoryName",
+    "product_category_name",
+    "product.categories",
+    "item.category.name",
+    "item.category",
+    "item.categoryName",
+    "item.category_name",
+    "parentCategoryName",
+    "parent_category_name",
+    "produto.categoria.nome",
+    "_parentCategory",
+  ]));
+
+  if (directCategory) {
+    return directCategory;
+  }
+
+  const categoryId = categoryIdFromItem(item);
+  return categoryId ? categoryLookup.get(categoryId) || "" : "";
+}
+
 function normalizeOrderItems(order) {
+  const categoryLookup = buildCategoryLookup(order);
+
   return findItemArray(order)
     .map((item) => {
       const name = String(getDeepValue(item, [
@@ -614,30 +740,7 @@ function normalizeOrderItems(order) {
           "count",
           "quantidade",
         ])),
-        category: textFromValue(getDeepValue(item, [
-          "category.name",
-          "category",
-          "categoryName",
-          "categories",
-          "categories.name",
-          "section.name",
-          "section",
-          "sector.name",
-          "sector",
-          "department.name",
-          "department",
-          "group.name",
-          "group",
-          "product.category.name",
-          "product.category",
-          "product.categoryName",
-          "product.categories",
-          "item.category.name",
-          "item.category",
-          "item.categoryName",
-          "produto.categoria.nome",
-          "_parentCategory",
-        ])),
+        category: categoryTextFromItem(item, categoryLookup),
         notes: extractNoteText(item),
         complements: normalizeComplements(item),
       };
