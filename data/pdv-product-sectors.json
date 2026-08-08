@@ -1,0 +1,20 @@
+{
+  "esfihas": [
+    "COMBO1",
+    "COMBO2",
+    "COMBO3",
+    "ESFPREMIUM",
+    "ESFIHAESP",
+    "ESFIHACOM",
+    "ESFIHADOCE",
+    "COMBO4"
+  ],
+  "porcoes": [
+    "PORCAOG",
+    "PORCAOM",
+    "PORCAOP",
+    "PORCAOBAT",
+    "PORCAOBOL",
+    "PORCAOFRITAS"
+  ]
+}

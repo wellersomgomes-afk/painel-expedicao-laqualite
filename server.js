@@ -10,6 +10,7 @@ const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
 const EVENTS_FILE = path.join(DATA_DIR, "events.json");
 const DISPATCHED_FILE = path.join(DATA_DIR, "dispatched-orders.json");
 const KDS_READY_FILE = path.join(DATA_DIR, "kds-ready-orders.json");
+const PDV_PRODUCT_SECTORS_FILE = path.join(DATA_DIR, "pdv-product-sectors.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
@@ -52,6 +53,10 @@ function ensureDataFile() {
 
   if (!fs.existsSync(KDS_READY_FILE)) {
     fs.writeFileSync(KDS_READY_FILE, JSON.stringify([], null, 2));
+  }
+
+  if (!fs.existsSync(PDV_PRODUCT_SECTORS_FILE)) {
+    fs.writeFileSync(PDV_PRODUCT_SECTORS_FILE, JSON.stringify({ esfihas: [], porcoes: [] }, null, 2));
   }
 }
 
@@ -102,6 +107,47 @@ function writeEvents(events) {
 function readDispatchedOrders() {
   ensureDataFile();
   return readJsonFile(DISPATCHED_FILE);
+}
+
+function normalizePdvCode(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function readPdvProductSectors() {
+  ensureDataFile();
+
+  try {
+    const configured = readJsonFile(PDV_PRODUCT_SECTORS_FILE);
+
+    return {
+      esfihas: new Set((configured.esfihas || []).map(normalizePdvCode).filter(Boolean)),
+      porcoes: new Set((configured.porcoes || []).map(normalizePdvCode).filter(Boolean)),
+    };
+  } catch (error) {
+    return {
+      esfihas: new Set(),
+      porcoes: new Set(),
+    };
+  }
+}
+
+function sectorsFromPdvCodes(codes) {
+  const pdvMap = readPdvProductSectors();
+  const sectors = new Set();
+
+  for (const code of codes || []) {
+    const normalizedCode = normalizePdvCode(code);
+
+    if (pdvMap.esfihas.has(normalizedCode)) {
+      sectors.add("esfihas");
+    }
+
+    if (pdvMap.porcoes.has(normalizedCode)) {
+      sectors.add("porcoes");
+    }
+  }
+
+  return [...sectors];
 }
 
 function writeDispatchedOrders(orders) {
@@ -513,6 +559,29 @@ function textFromValue(value) {
   return "";
 }
 
+function searchTextFromValue(value, depth = 0) {
+  if (!value || depth > 5) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => searchTextFromValue(item, depth + 1)).filter(Boolean).join(" ");
+  }
+
+  if (typeof value === "object") {
+    return Object.values(value)
+      .map((item) => searchTextFromValue(item, depth + 1))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return "";
+}
+
 function categoryNameFromObject(value) {
   return textFromValue(getDeepValue(value, [
     "category.name",
@@ -713,6 +782,70 @@ function categoryTextFromItem(item, categoryLookup) {
   return categoryId ? categoryLookup.get(categoryId) || "" : "";
 }
 
+function pdvCodesFromItem(item) {
+  const values = [
+    getDeepValue(item, [
+      "pdvCode",
+      "pdv_code",
+      "codigoPdv",
+      "codigoPDV",
+      "codigo_pdv",
+      "product.pdvCode",
+      "product.pdv_code",
+      "product.codigoPdv",
+      "product.codigoPDV",
+      "product.codigo_pdv",
+      "item.pdvCode",
+      "item.pdv_code",
+      "sku",
+      "SKU",
+      "product.sku",
+      "product.SKU",
+      "item.sku",
+      "productCode",
+      "product_code",
+      "product.productCode",
+      "product.product_code",
+      "externalCode",
+      "external_code",
+      "product.externalCode",
+      "product.external_code",
+      "internalCode",
+      "internal_code",
+      "product.internalCode",
+      "product.internal_code",
+      "integrationCode",
+      "integration_code",
+      "product.integrationCode",
+      "product.integration_code",
+      "reference",
+      "product.reference",
+      "referencia",
+      "product.referencia",
+    ]),
+    findValueByKeyNames(item, [
+      "pdvCode",
+      "pdv_code",
+      "codigoPdv",
+      "codigoPDV",
+      "codigo_pdv",
+      "sku",
+      "productCode",
+      "product_code",
+      "externalCode",
+      "external_code",
+      "internalCode",
+      "internal_code",
+      "integrationCode",
+      "integration_code",
+      "reference",
+      "referencia",
+    ]),
+  ];
+
+  return [...new Set(values.map(normalizePdvCode).filter(Boolean))];
+}
+
 function normalizeOrderItems(order) {
   const categoryLookup = buildCategoryLookup(order);
 
@@ -731,7 +864,10 @@ function normalizeOrderItems(order) {
         return null;
       }
 
-      return {
+      const category = categoryTextFromItem(item, categoryLookup);
+      const complements = normalizeComplements(item);
+      const pdvCodes = pdvCodesFromItem(item);
+      const normalizedItem = {
         name,
         quantity: toNumber(getDeepValue(item, [
           "quantity",
@@ -740,9 +876,16 @@ function normalizeOrderItems(order) {
           "count",
           "quantidade",
         ])),
-        category: categoryTextFromItem(item, categoryLookup),
+        category,
         notes: extractNoteText(item),
-        complements: normalizeComplements(item),
+        complements,
+        pdvCodes,
+        searchText: searchTextFromValue(item),
+      };
+
+      return {
+        ...normalizedItem,
+        sectors: sectorKeysForItem(normalizedItem),
       };
     })
     .filter(Boolean);
@@ -867,6 +1010,9 @@ function normalizeComplements(item) {
           complements.push({
             name,
             quantity: toNumber(getDeepValue(nestedItem, ["quantity", "qty", "amount", "count"]), 1),
+            category: categoryTextFromItem(nestedItem, new Map()),
+            pdvCodes: pdvCodesFromItem(nestedItem),
+            searchText: searchTextFromValue(nestedItem),
           });
         }
       });
@@ -885,6 +1031,9 @@ function normalizeComplements(item) {
       complements.push({
         name,
         quantity: toNumber(getDeepValue(complement, ["quantity", "qty", "amount", "count"]), 1),
+        category: categoryTextFromItem(complement, new Map()),
+        pdvCodes: pdvCodesFromItem(complement),
+        searchText: searchTextFromValue(complement),
       });
     }
   }
@@ -1346,10 +1495,10 @@ function normalizeText(value) {
 
 function itemSearchText(item) {
   const complements = (item.complements || [])
-    .map((complement) => `${complement.name || ""} ${complement.category || ""}`)
+    .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${complement.searchText || ""}`)
     .join(" ");
 
-  return normalizeText(`${item.category || ""} ${item.name || ""} ${item.description || ""} ${item.notes || ""} ${complements}`);
+  return normalizeText(`${item.category || ""} ${item.name || ""} ${(item.pdvCodes || []).join(" ")} ${item.description || ""} ${item.notes || ""} ${item.searchText || ""} ${complements}`);
 }
 
 function hasAnyTerm(text, terms) {
@@ -1372,14 +1521,68 @@ function sectorFromCategory(categoryText) {
   return null;
 }
 
+function sectorKeysForItem(item) {
+  const categorySector = sectorFromCategory(normalizeText(item.category || ""));
+  const text = itemSearchText(item);
+  const sectors = new Set();
+  const pdvCodes = [
+    ...(item.pdvCodes || []),
+    ...(item.complements || []).flatMap((complement) => complement.pdvCodes || []),
+  ];
+
+  for (const sector of sectorsFromPdvCodes(pdvCodes)) {
+    sectors.add(sector);
+  }
+
+  if (categorySector) {
+    sectors.add(categorySector.key);
+  }
+
+  if (hasAnyTerm(text, ["pizza", "pizzas"])) {
+    sectors.add("pizzas");
+  }
+
+  if (hasAnyTerm(text, ["esfiha", "esfihas", "esfirra", "esfirras", "sfiha", "sfihas"])) {
+    sectors.add("esfihas");
+  }
+
+  if (hasAnyTerm(text, ["porcao", "porcoes", "porc", "fritas", "batata", "mandioca", "onion", "aneis", "anel de cebola", "suco", "sucos"])) {
+    sectors.add("porcoes");
+  }
+
+  if (
+    sectors.size === 0 &&
+    hasAnyTerm(text, ["combo 1", "combo 2", "combo 3", "combo 4", "combo de esfiha", "combo esfihas", "combo esfiha"])
+  ) {
+    sectors.add("esfihas");
+  }
+
+  return [...sectors];
+}
+
 function classifyProductionItem(item) {
   const categoryText = normalizeText(item.category || "");
   const text = itemSearchText(item);
   const isCombo = hasAnyTerm(text, ["combo", "combinado", "kit", "box"]);
   const categorySector = sectorFromCategory(categoryText);
+  const sectors = Array.isArray(item.sectors) && item.sectors.length > 0
+    ? item.sectors
+    : sectorKeysForItem(item);
 
   if (categorySector) {
     return { ...categorySector, isCombo };
+  }
+
+  if (sectors.includes("esfihas")) {
+    return { key: "esfihas", label: "Esfihas", isCombo };
+  }
+
+  if (sectors.includes("porcoes")) {
+    return { key: "porcoes", label: "Porções", isCombo };
+  }
+
+  if (sectors.includes("pizzas")) {
+    return { key: "pizzas", label: "Pizzas", isCombo };
   }
 
   if (hasAnyTerm(text, ["pizza", "pizzas"])) {
@@ -1394,8 +1597,11 @@ function classifyProductionItem(item) {
     return { key: "porcoes", label: "Porções", isCombo };
   }
 
-  if (isCombo) {
-    return { key: "combos", label: "Combos", isCombo: true };
+  if (
+    isCombo &&
+    hasAnyTerm(text, ["combo 1", "combo 2", "combo 3", "combo 4", "combo de esfiha", "combo esfihas", "combo esfiha"])
+  ) {
+    return { key: "esfihas", label: "Esfihas", isCombo: true };
   }
 
   return { key: "outros", label: "Outros", isCombo: false };
@@ -1516,6 +1722,21 @@ function buildKdsReadyOrders() {
     .filter(Boolean)
     .filter((order) => order.items.length > 0)
     .sort((a, b) => Number(b.readyAt || 0) - Number(a.readyAt || 0));
+}
+
+function buildKdsDebug() {
+  return readOrders().map((order) => ({
+    number: order.number,
+    customer: order.customer,
+    items: (order.items || []).map((item) => ({
+      name: item.name,
+      category: item.category || "",
+      pdvCodes: item.pdvCodes || [],
+      sectors: sectorKeysForItem(item),
+      classification: classifyProductionItem(item).key,
+      searchText: itemSearchText(item).slice(0, 300),
+    })),
+  }));
 }
 
 function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
@@ -1792,6 +2013,11 @@ const server = http.createServer(async (request, response) => {
       updatedAt: formatLocalTime(),
       orders: buildKdsReadyOrders(),
     });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/kds-debug") {
+    sendJson(response, 200, { orders: buildKdsDebug() });
     return;
   }
 

@@ -90,10 +90,10 @@ function isPizzaItem(item) {
 
 function itemSearchText(item) {
   const complements = (item.complements || [])
-    .map((complement) => `${complement.name || ""} ${complement.category || ""}`)
+    .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${complement.searchText || ""}`)
     .join(" ");
 
-  return normalizeText(`${item.category || ""} ${item.name || ""} ${item.description || ""} ${item.notes || ""} ${complements}`);
+  return normalizeText(`${item.category || ""} ${item.name || ""} ${(item.pdvCodes || []).join(" ")} ${item.description || ""} ${item.notes || ""} ${item.searchText || ""} ${complements}`);
 }
 
 function hasAnyTerm(text, terms) {
@@ -117,27 +117,45 @@ function sectorFromCategory(categoryText) {
 }
 
 function sectorForItem(item) {
+  const sectors = sectorsForItem(item);
+
+  return sectors[0] || "outros";
+}
+
+function sectorsForItem(item) {
+  if (Array.isArray(item.sectors) && item.sectors.length > 0) {
+    return item.sectors;
+  }
+
   const categorySector = sectorFromCategory(normalizeText(item.category || ""));
 
   if (categorySector) {
-    return categorySector;
+    return [categorySector];
   }
 
   const text = itemSearchText(item);
+  const sectors = new Set();
 
   if (hasAnyTerm(text, ["pizza", "pizzas"])) {
-    return "pizzas";
+    sectors.add("pizzas");
   }
 
   if (hasAnyTerm(text, ["esfiha", "esfihas", "esfirra", "esfirras", "sfiha", "sfihas"])) {
-    return "esfihas";
+    sectors.add("esfihas");
   }
 
   if (hasAnyTerm(text, ["porcao", "porcoes", "porc", "fritas", "batata", "mandioca", "onion", "aneis", "anel de cebola", "suco", "sucos"])) {
-    return "porcoes";
+    sectors.add("porcoes");
   }
 
-  return "outros";
+  if (
+    sectors.size === 0 &&
+    hasAnyTerm(text, ["combo 1", "combo 2", "combo 3", "combo 4", "combo de esfiha", "combo esfihas", "combo esfiha"])
+  ) {
+    sectors.add("esfihas");
+  }
+
+  return [...sectors];
 }
 
 function sectorLabel() {
@@ -169,7 +187,9 @@ function isDispatchMode() {
 
 function filterOrderForSector(order) {
   const items = (order.items || []).filter((item) =>
-    activeSector === "all" ? ["pizzas", "esfihas", "porcoes"].includes(sectorForItem(item)) : sectorForItem(item) === activeSector
+    activeSector === "all"
+      ? sectorsForItem(item).some((sector) => ["pizzas", "esfihas", "porcoes"].includes(sector))
+      : sectorsForItem(item).includes(activeSector)
   );
 
   if (items.length === 0) {
@@ -180,7 +200,9 @@ function filterOrderForSector(order) {
 }
 
 function filterOrderForDispatch(order) {
-  const items = (order.items || []).filter((item) => ["pizzas", "esfihas", "porcoes"].includes(sectorForItem(item)));
+  const items = (order.items || []).filter((item) =>
+    sectorsForItem(item).some((sector) => ["pizzas", "esfihas", "porcoes"].includes(sector))
+  );
 
   if (items.length === 0) {
     return null;
