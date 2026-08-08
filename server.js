@@ -1186,19 +1186,53 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
-function classifyProductionItem(item) {
-  const text = normalizeText(`${item.category} ${item.name}`);
-  const isCombo = text.includes("combo");
+function itemSearchText(item) {
+  const complements = (item.complements || [])
+    .map((complement) => `${complement.name || ""} ${complement.category || ""}`)
+    .join(" ");
 
-  if (text.includes("pizza")) {
+  return normalizeText(`${item.category || ""} ${item.name || ""} ${item.description || ""} ${item.notes || ""} ${complements}`);
+}
+
+function hasAnyTerm(text, terms) {
+  return terms.some((term) => text.includes(term));
+}
+
+function sectorFromCategory(categoryText) {
+  if (hasAnyTerm(categoryText, ["porcao", "porcoes", "porc"])) {
+    return { key: "porcoes", label: "Porções" };
+  }
+
+  if (hasAnyTerm(categoryText, ["esfiha", "esfihas", "esfirra", "esfirras", "sfiha", "sfihas"])) {
+    return { key: "esfihas", label: "Esfihas" };
+  }
+
+  if (hasAnyTerm(categoryText, ["pizza", "pizzas"])) {
+    return { key: "pizzas", label: "Pizzas" };
+  }
+
+  return null;
+}
+
+function classifyProductionItem(item) {
+  const categoryText = normalizeText(item.category || "");
+  const text = itemSearchText(item);
+  const isCombo = hasAnyTerm(text, ["combo", "combinado", "kit", "box"]);
+  const categorySector = sectorFromCategory(categoryText);
+
+  if (categorySector) {
+    return { ...categorySector, isCombo };
+  }
+
+  if (hasAnyTerm(text, ["pizza", "pizzas"])) {
     return { key: "pizzas", label: "Pizzas", isCombo };
   }
 
-  if (text.includes("esfiha") || text.includes("esfirra")) {
+  if (hasAnyTerm(text, ["esfiha", "esfihas", "esfirra", "esfirras", "sfiha", "sfihas"])) {
     return { key: "esfihas", label: "Esfihas", isCombo };
   }
 
-  if (text.includes("porcao") || text.includes("porcoes") || text.includes("porção") || text.includes("porções")) {
+  if (hasAnyTerm(text, ["porcao", "porcoes", "porc", "fritas", "batata", "mandioca", "onion", "aneis", "anel de cebola"])) {
     return { key: "porcoes", label: "Porções", isCombo };
   }
 

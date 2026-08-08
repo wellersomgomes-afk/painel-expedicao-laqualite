@@ -88,18 +88,52 @@ function isPizzaItem(item) {
   return category.includes("pizza") || name.includes("pizza");
 }
 
-function sectorForItem(item) {
-  const text = normalizeText(`${item.category || ""} ${item.name || ""}`);
+function itemSearchText(item) {
+  const complements = (item.complements || [])
+    .map((complement) => `${complement.name || ""} ${complement.category || ""}`)
+    .join(" ");
 
-  if (text.includes("pizza")) {
-    return "pizzas";
+  return normalizeText(`${item.category || ""} ${item.name || ""} ${item.description || ""} ${item.notes || ""} ${complements}`);
+}
+
+function hasAnyTerm(text, terms) {
+  return terms.some((term) => text.includes(term));
+}
+
+function sectorFromCategory(categoryText) {
+  if (hasAnyTerm(categoryText, ["porcao", "porcoes", "porc"])) {
+    return "porcoes";
   }
 
-  if (text.includes("esfiha") || text.includes("esfirra")) {
+  if (hasAnyTerm(categoryText, ["esfiha", "esfihas", "esfirra", "esfirras", "sfiha", "sfihas"])) {
     return "esfihas";
   }
 
-  if (text.includes("porcao") || text.includes("porcoes")) {
+  if (hasAnyTerm(categoryText, ["pizza", "pizzas"])) {
+    return "pizzas";
+  }
+
+  return "";
+}
+
+function sectorForItem(item) {
+  const categorySector = sectorFromCategory(normalizeText(item.category || ""));
+
+  if (categorySector) {
+    return categorySector;
+  }
+
+  const text = itemSearchText(item);
+
+  if (hasAnyTerm(text, ["pizza", "pizzas"])) {
+    return "pizzas";
+  }
+
+  if (hasAnyTerm(text, ["esfiha", "esfihas", "esfirra", "esfirras", "sfiha", "sfihas"])) {
+    return "esfihas";
+  }
+
+  if (hasAnyTerm(text, ["porcao", "porcoes", "porc", "fritas", "batata", "mandioca", "onion", "aneis", "anel de cebola"])) {
     return "porcoes";
   }
 
