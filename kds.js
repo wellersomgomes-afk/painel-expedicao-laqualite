@@ -304,7 +304,6 @@ function renderDispatchOrder(order) {
   const isPickup = isPickupOrder(order);
   const service = isPickup ? "Retirada" : order.neighborhood || "Entrega";
   const buttonLabel = isPickup ? "Pronto para retirada" : "Despachar";
-  const statusText = isPickup ? "Disponível para retirada" : "Pronto para despacho";
 
   return `
     <article class="dispatch-card" data-number="${order.number}" data-order-id="${order.orderId || ""}">
@@ -315,7 +314,15 @@ function renderDispatchOrder(order) {
         </div>
         <div class="dispatch-time">${formatTimer(order)}</div>
       </header>
-      <div class="dispatch-state">${statusText}</div>
+      <button
+        class="kds-dispatch-button dispatch-top-action${isPickup ? " pickup" : ""}"
+        type="button"
+        data-number="${order.number}"
+        data-order-id="${order.orderId || ""}"
+        data-action="${isPickup ? "pickup-ready" : "dispatch"}"
+      >
+        ${buttonLabel}
+      </button>
       <div class="dispatch-items">
         ${order.items.map((item) => `
           <article class="dispatch-item">
@@ -330,15 +337,6 @@ function renderDispatchOrder(order) {
           </article>
         `).join("")}
       </div>
-      <button
-        class="kds-dispatch-button${isPickup ? " pickup" : ""}"
-        type="button"
-        data-number="${order.number}"
-        data-order-id="${order.orderId || ""}"
-        data-action="${isPickup ? "pickup-ready" : "dispatch"}"
-      >
-        ${buttonLabel}
-      </button>
     </article>
   `;
 }
