@@ -72,8 +72,9 @@ function readOrders() {
       neighborhood:
         order.neighborhood === "Bairro nao informado" ||
         order.fulfillmentType === "pickup"
-          ? "Retirada"
+          ? ""
           : order.neighborhood,
+      city: order.fulfillmentType === "pickup" ? "" : order.city,
     }));
 
   if (realOrders.length !== orders.length) {
@@ -183,37 +184,21 @@ async function notifyCardapioOrderReadySafely(order) {
   }
 }
 
-async function markKdsOrderReady(target) {
-  const orders = readOrders();
-  const order = orders.find((item) => isSameOrder(item, target));
-
-  if (!order) {
-    return { ok: false, message: "Pedido nao encontrado no KDS." };
-  }
-
-  const readyOrders = readKdsReadyOrders().filter((item) => !isSameOrder(item, order));
-
-  readyOrders.unshift({
-    number: order.number,
-    orderId: order.orderId,
-    customer: order.customer,
-    readyAt: Date.now(),
-  });
-
-  writeKdsReadyOrders(readyOrders);
-  const cardapioResult = await notifyCardapioOrderReadySafely(order);
-  recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-ready" }, cardapioResult);
-
-  return {
-    ok: true,
-    action: "ready",
-    order: order.number,
-    cardapio: cardapioResult,
-  };
-}
-
 function kdsItemKey(item, index) {
   return `${index}:${String(item.name || "").toLowerCase()}`;
+}
+
+function isProductionKdsItem(item) {
+  const classification = classifyProductionItem(item);
+
+  return ["pizzas", "esfihas", "porcoes"].includes(classification.key);
+}
+
+function productionItemKeys(order) {
+  return (order.items || [])
+    .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
+    .filter(({ item }) => isProductionKdsItem(item))
+    .map(({ key }) => key);
 }
 
 function isPizzaKdsItem(item) {
@@ -222,7 +207,7 @@ function isPizzaKdsItem(item) {
   return text.includes("pizza") || text.includes("pizzas");
 }
 
-async function markKdsItemReady(target) {
+async function saveKdsReadyItems(target, source) {
   const orders = readOrders();
   const order = orders.find((item) => isSameOrder(item, target));
 
@@ -239,14 +224,14 @@ async function markKdsItemReady(target) {
     readyItems: [],
   };
   const readyItems = new Set(currentReady.readyItems || []);
+  const targetKeys = Array.isArray(target.itemKeys) && target.itemKeys.length > 0
+    ? target.itemKeys
+    : [target.itemKey].filter(Boolean);
 
-  readyItems.add(String(target.itemKey || ""));
+  targetKeys.forEach((key) => readyItems.add(String(key || "")));
 
-  const pizzaKeys = order.items
-    .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
-    .filter(({ item }) => isPizzaKdsItem(item))
-    .map(({ key }) => key);
-  const isOrderReady = pizzaKeys.length > 0 && pizzaKeys.every((key) => readyItems.has(key));
+  const pendingProductionKeys = productionItemKeys(order);
+  const isOrderReady = pendingProductionKeys.length > 0 && pendingProductionKeys.every((key) => readyItems.has(key));
   const nextReady = {
     ...currentReady,
     readyItems: [...readyItems].filter(Boolean),
@@ -265,16 +250,24 @@ async function markKdsItemReady(target) {
     : { ok: true, action: "cardapio-not-called", message: "Ainda existem produtos pendentes no KDS." };
 
   if (isOrderReady) {
-    recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-item-ready" }, cardapioResult);
+    recordSystemEvent({ order: order.number, orderId: order.orderId, source }, cardapioResult);
   }
 
   return {
     ok: true,
     action: isOrderReady ? "ready" : "item-ready",
     order: order.number,
-    itemKey: target.itemKey || "",
+    itemKeys: targetKeys,
     cardapio: cardapioResult,
   };
+}
+
+async function markKdsOrderReady(target) {
+  return saveKdsReadyItems(target, "kds-ready");
+}
+
+async function markKdsItemReady(target) {
+  return saveKdsReadyItems(target, "kds-item-ready");
 }
 
 function recordDispatchedOrder(order, payload) {
@@ -283,12 +276,14 @@ function recordDispatchedOrder(order, payload) {
     number: order.number,
     orderId: order.orderId,
     customer: order.customer || "Cliente",
+    fulfillmentType: order.fulfillmentType,
     neighborhood:
       order.fulfillmentType === "pickup" ||
       order.neighborhood === "Bairro nao informado"
-        ? "Retirada"
+        ? ""
         : order.neighborhood,
-    eventType: payload.eventType || "",
+    city: order.fulfillmentType === "pickup" ? "" : order.city || "",
+    eventType: payload.eventType || payload.action || "",
     dispatchedAt: Date.now(),
   };
   const withoutDuplicate = dispatchedOrders.filter((item) =>
@@ -298,6 +293,54 @@ function recordDispatchedOrder(order, payload) {
 
   withoutDuplicate.unshift(dispatchedOrder);
   writeDispatchedOrders(withoutDuplicate);
+}
+
+function removeKdsReadyOrder(order) {
+  const readyOrders = readKdsReadyOrders().filter((item) => !isSameOrder(item, order));
+  writeKdsReadyOrders(readyOrders);
+}
+
+function notifyCardapioDispatchSafely(order, action) {
+  return {
+    ok: true,
+    action: "cardapio-dispatch-skipped",
+    order: order.number,
+    dispatchAction: action,
+    message: "Despacho mantido apenas interno. Configure o endpoint do Cardapio Web para envio automatico.",
+  };
+}
+
+async function dispatchKdsReadyOrder(target) {
+  const orders = readOrders();
+  const orderIndex = orders.findIndex((item) => isSameOrder(item, target));
+  const order = orders[orderIndex];
+
+  if (!order) {
+    return { ok: false, message: "Pedido pronto nao encontrado." };
+  }
+
+  const readyOrder = readKdsReadyOrders().find((item) => isSameOrder(item, order));
+
+  if (!readyOrder?.readyAt) {
+    return { ok: false, message: "Pedido ainda nao esta totalmente pronto." };
+  }
+
+  const action = target.action === "pickup-ready" ? "pickup-ready" : "dispatch";
+  const eventType = action === "pickup-ready" ? "READY_FOR_PICKUP" : "DISPATCHED";
+
+  orders.splice(orderIndex, 1);
+  writeOrders(orders);
+  removeKdsReadyOrder(order);
+  recordDispatchedOrder(order, { action, eventType });
+  const cardapioResult = notifyCardapioDispatchSafely(order, action);
+  recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-dispatch", action }, cardapioResult);
+
+  return {
+    ok: true,
+    action,
+    order: order.number,
+    cardapio: cardapioResult,
+  };
 }
 
 function readJsonFile(filePath) {
@@ -1010,6 +1053,10 @@ async function syncOpenOrders() {
 }
 
 async function syncOpenOrdersSafely() {
+  if (!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) {
+    return;
+  }
+
   try {
     const result = await syncOpenOrders();
     recordSystemEvent({ source: CARDAPIO_ORDERS_URL }, result);
@@ -1115,8 +1162,8 @@ function normalizeOrder(payload) {
       "buyer.name",
       "consumer.name",
     ]) || "Cliente"),
-    neighborhood: fulfillmentType === "pickup" ? "Retirada" : neighborhood,
-    city: fulfillmentType === "pickup" ? "Retirada" : city,
+    neighborhood: fulfillmentType === "pickup" ? "" : neighborhood,
+    city: fulfillmentType === "pickup" ? "" : city,
     fulfillmentType,
     arrivedAt: parseDateToTimestamp(
       order.arrivedAt ||
@@ -1236,10 +1283,10 @@ function buildKdsOrders() {
             kdsItemKey: kdsItemKey(item, index),
             notes: item.notes || extractNoteText(item),
           }))
-          .filter((item) => !readyItems.has(item.kdsItemKey)),
+          .filter((item) => isProductionKdsItem(item) && !readyItems.has(item.kdsItemKey)),
       };
     })
-    .filter((order) => order.items.some(isPizzaKdsItem));
+    .filter((order) => order.items.length > 0);
 }
 
 function buildKdsReadyOrders() {
@@ -1247,7 +1294,7 @@ function buildKdsReadyOrders() {
   const readyOrders = readKdsReadyOrders();
 
   return readyOrders
-    .filter((readyOrder) => readyOrder.readyAt)
+    .filter((readyOrder) => readyOrder.readyAt || (readyOrder.readyItems || []).length > 0)
     .map((readyOrder) => {
       const order = orders.find((item) => isSameOrder(item, readyOrder));
 
@@ -1264,15 +1311,84 @@ function buildKdsReadyOrders() {
         arrivedAt: order.arrivedAt,
         readyAt: readyOrder.readyAt,
         notes: order.notes || "",
-        items: order.items.map((item, index) => ({
-          ...item,
-          kdsItemKey: kdsItemKey(item, index),
-          notes: item.notes || extractNoteText(item),
-        })),
+        items: order.items
+          .map((item, index) => ({
+            ...item,
+            kdsItemKey: kdsItemKey(item, index),
+            notes: item.notes || extractNoteText(item),
+          }))
+          .filter((item) => isProductionKdsItem(item))
+          .filter((item) => readyOrder.readyAt || (readyOrder.readyItems || []).includes(item.kdsItemKey)),
       };
     })
     .filter(Boolean)
-    .sort((a, b) => b.readyAt - a.readyAt);
+    .filter((order) => order.items.length > 0)
+    .sort((a, b) => Number(b.readyAt || 0) - Number(a.readyAt || 0));
+}
+
+function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
+  const productionKeys = productionItemKeys(order);
+
+  if (productionKeys.length === 0) {
+    return {
+      label: "Sem producao",
+      state: "none",
+      readyCount: 0,
+      totalCount: 0,
+    };
+  }
+
+  const readyOrder = readyOrders.find((item) => isSameOrder(item, order));
+  const readyItems = new Set(readyOrder?.readyItems || []);
+  const readyCount = productionKeys.filter((key) => readyItems.has(key)).length;
+
+  if (readyOrder?.readyAt || readyCount >= productionKeys.length) {
+    return {
+      label: "Pronto",
+      state: "ready",
+      readyCount: productionKeys.length,
+      totalCount: productionKeys.length,
+    };
+  }
+
+  if (readyCount > 0) {
+    return {
+      label: "Falta item",
+      state: "partial",
+      readyCount,
+      totalCount: productionKeys.length,
+    };
+  }
+
+  return {
+    label: "Em preparo",
+    state: "preparing",
+    readyCount: 0,
+    totalCount: productionKeys.length,
+  };
+}
+
+async function syncOpenOrdersForPageLoad() {
+  try {
+    return await syncOpenOrders();
+  } catch (error) {
+    return {
+      ok: false,
+      action: "sync-failed",
+      message: error.message,
+    };
+  }
+}
+
+function ordersWithKdsStatus() {
+  const readyOrders = readKdsReadyOrders();
+
+  return readOrders()
+    .map((order) => ({
+      ...order,
+      kdsStatus: kdsStatusForOrder(order, readyOrders),
+    }))
+    .sort((a, b) => b.arrivedAt - a.arrivedAt);
 }
 
 function isDispatchEvent(payload, normalizedOrder) {
@@ -1433,7 +1549,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -1445,8 +1561,10 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method === "GET" && url.pathname === "/api/orders") {
-    const orders = readOrders().sort((a, b) => b.arrivedAt - a.arrivedAt);
-    sendJson(response, 200, { orders });
+    const sync = url.searchParams.get("sync") === "1"
+      ? await syncOpenOrdersForPageLoad()
+      : null;
+    sendJson(response, 200, { orders: ordersWithKdsStatus(), sync });
     return;
   }
 
@@ -1466,8 +1584,12 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method === "GET" && url.pathname === "/api/kds-orders") {
+    const sync = url.searchParams.get("sync") === "1"
+      ? await syncOpenOrdersForPageLoad()
+      : null;
     sendJson(response, 200, {
       updatedAt: formatLocalTime(),
+      sync,
       orders: buildKdsOrders(),
     });
     return;
@@ -1499,6 +1621,17 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, result.ok ? 200 : 404, result);
     } catch (error) {
       sendJson(response, 400, { ok: false, message: "Produto invalido." });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/kds-dispatch") {
+    try {
+      const body = await readBody(request);
+      const result = await dispatchKdsReadyOrder(body);
+      sendJson(response, result.ok ? 200 : 404, result);
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: "Despacho invalido." });
     }
     return;
   }

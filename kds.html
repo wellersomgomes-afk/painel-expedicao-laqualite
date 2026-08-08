@@ -8,39 +8,86 @@
   </head>
   <body>
     <main class="screen kds-screen">
-      <button class="kds-menu-toggle" id="kds-menu-toggle" type="button">Ocultar menu</button>
+      <button class="kds-menu-restore" id="kds-menu-restore" type="button">Mostrar menu</button>
 
       <header class="topbar">
         <div>
           <p class="eyebrow">La Qualite Delivery</p>
-          <h1>KDS Pizza</h1>
+          <h1>KDS Produção</h1>
         </div>
 
         <div class="kds-actions">
-          <div class="kds-size-control" aria-label="Tamanho dos cards">
-            <button class="kds-size-button" type="button" data-size="compact">Menor</button>
-            <button class="kds-size-button active" type="button" data-size="normal">Normal</button>
-            <button class="kds-size-button" type="button" data-size="large">Maior</button>
+          <div class="kds-settings">
+            <button class="kds-settings-button" id="kds-settings-button" type="button" aria-expanded="false">
+              Configuracoes
+            </button>
+            <div class="kds-settings-panel" id="kds-settings-panel" hidden>
+              <div class="kds-settings-group">
+                <span>Tamanho dos cards</span>
+                <div class="kds-size-control" aria-label="Tamanho dos cards">
+                  <button class="kds-size-button" type="button" data-size="compact">Menor</button>
+                  <button class="kds-size-button active" type="button" data-size="normal">Normal</button>
+                  <button class="kds-size-button" type="button" data-size="large">Maior</button>
+                </div>
+              </div>
+              <div class="kds-settings-group kds-sector-settings">
+                <span>Setor</span>
+                <nav class="kds-product-tabs" aria-label="Setor de producao">
+                  <button class="kds-product-tab active" type="button" data-sector="pizzas">Pizzas</button>
+                  <button class="kds-product-tab" type="button" data-sector="esfihas">Esfihas</button>
+                  <button class="kds-product-tab" type="button" data-sector="porcoes">Porcoes</button>
+                  <button class="kds-product-tab" type="button" data-sector="all">Todos</button>
+                  <button class="kds-product-tab" type="button" data-sector="dispatch">Despacho</button>
+                </nav>
+              </div>
+              <div class="kds-settings-group">
+                <span>Tipo de pedido</span>
+                <nav class="kds-service-tabs" aria-label="Tipo de pedido">
+                  <button class="kds-service-tab active" type="button" data-service="both">Entrega / Retirada</button>
+                  <button class="kds-service-tab" type="button" data-service="delivery">Entrega</button>
+                  <button class="kds-service-tab" type="button" data-service="pickup">Retirada</button>
+                </nav>
+              </div>
+              <button class="kds-fullscreen-button" id="kds-fullscreen-button" type="button">Tela cheia</button>
+              <a class="panel-link" href="/">Expedicao</a>
+              <button class="kds-menu-toggle" id="kds-menu-toggle" type="button">Ocultar menu</button>
+            </div>
           </div>
-          <button class="kds-fullscreen-button" id="kds-fullscreen-button" type="button">Tela cheia</button>
-          <a class="panel-link" href="/">Expedicao</a>
         </div>
       </header>
 
       <section class="summary" aria-label="Resumo da producao">
         <div class="summary-item">
-          <span id="kds-count-label">Pedidos em preparo</span>
-          <strong id="kds-order-count">0</strong>
+          <span>Em preparo</span>
+          <strong id="kds-production-count">0</strong>
         </div>
         <div class="summary-item">
-          <span>Atualizado</span>
-          <strong id="kds-updated-at">--:--</strong>
+          <span>Pedidos pronto</span>
+          <strong id="kds-ready-count">0</strong>
         </div>
+        <div class="summary-item">
+          <span>Tempo medio</span>
+          <strong id="kds-average-time">--:--</strong>
+        </div>
+      </section>
+
+      <section class="kds-search" aria-label="Buscar pedido no KDS">
+        <label for="kds-search-input">Buscar número do pedido</label>
+        <input id="kds-search-input" type="search" inputmode="numeric" autocomplete="off" placeholder="Ex: 1025" />
+        <button id="kds-search-clear" type="button">Limpar</button>
       </section>
 
       <nav class="kds-view-tabs" aria-label="Status do KDS">
         <button class="kds-view-tab active" type="button" data-view="production">Em preparo</button>
         <button class="kds-view-tab" type="button" data-view="ready">Pedidos Prontos</button>
+      </nav>
+
+      <nav class="kds-product-tabs" aria-label="Setor de producao">
+        <button class="kds-product-tab active" type="button" data-sector="pizzas">Pizzas</button>
+        <button class="kds-product-tab" type="button" data-sector="esfihas">Esfihas</button>
+        <button class="kds-product-tab" type="button" data-sector="porcoes">Porções</button>
+        <button class="kds-product-tab" type="button" data-sector="all">Todos</button>
+        <button class="kds-product-tab" type="button" data-sector="dispatch">Despacho</button>
       </nav>
 
       <nav class="kds-service-tabs" aria-label="Tipo de pedido">

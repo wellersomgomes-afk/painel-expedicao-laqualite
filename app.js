@@ -9,6 +9,7 @@ let dispatchedOrders = [];
 let events = [];
 
 let activeFilter = "all";
+let shouldSyncOnNextOrdersLoad = true;
 
 const orderList = document.querySelector("#order-list");
 const ordersPanel = document.querySelector("#orders-panel");
@@ -48,12 +49,17 @@ function isLate(order) {
 
 function statusFor(order) {
   const minutes = elapsedMinutes(order);
+  const attentionLimit = Math.min(20, Math.max(lateLimitMinutes - 10, 0));
+
+  if (minutes >= lateLimitMinutes + 15) {
+    return { label: "Muito atrasado", className: "critical" };
+  }
 
   if (minutes >= lateLimitMinutes) {
     return { label: "Atrasado", className: "late" };
   }
 
-  if (minutes >= Math.max(lateLimitMinutes - 1, 0)) {
+  if (minutes >= attentionLimit) {
     return { label: "Atenção", className: "warning" };
   }
 
@@ -70,12 +76,27 @@ function isDelivery(order) {
 
 function displayNeighborhood(order) {
   return isPickup(order) || order.neighborhood === "Bairro nao informado"
-    ? "Retirada"
+    ? ""
     : order.neighborhood;
 }
 
 function displayCity(order) {
-  return isPickup(order) ? "Retirada" : order.city || "Cidade nao informada";
+  return isPickup(order) ? "" : order.city || "Cidade nao informada";
+}
+
+function orderTypeLabel(order) {
+  return isPickup(order) ? "Retirada" : "Entrega";
+}
+
+function kdsStatusFor(order) {
+  const status = order.kdsStatus || {};
+  const state = status.state || "preparing";
+  const label = status.label || "Em preparo";
+  const readyCount = Number(status.readyCount || 0);
+  const totalCount = Number(status.totalCount || 0);
+  const progress = totalCount > 0 && state === "partial" ? ` ${readyCount}/${totalCount}` : "";
+
+  return { label: `${label}${progress}`, state };
 }
 
 function updateFullscreenButton() {
@@ -154,10 +175,12 @@ function renderOrders() {
   orderList.innerHTML = visibleOrders
     .map((order) => {
       const status = statusFor(order);
+      const kdsStatus = kdsStatusFor(order);
 
       return `
-        <article class="order-row">
+        <article class="order-row priority-${status.className}">
           <div class="order-number">#${order.number}</div>
+          <div class="service-badge ${isPickup(order) ? "pickup" : "delivery"}">${orderTypeLabel(order)}</div>
           <div class="order-info">
             <span class="mobile-label">Cliente</span>
             <strong>${order.customer}</strong>
@@ -170,6 +193,7 @@ function renderOrders() {
             <span class="mobile-label">Cidade</span>
             <strong>${displayCity(order)}</strong>
           </div>
+          <div class="order-kds-status ${kdsStatus.state}">${kdsStatus.label}</div>
           <div class="timer">${formatTimer(order)}</div>
           <div class="status ${status.className}">${status.label}</div>
         </article>
@@ -196,6 +220,7 @@ function renderDispatchedOrders() {
     .map((order) => `
       <article class="order-row dispatched-row">
         <div class="order-number">#${order.number}</div>
+        <div class="service-badge ${isPickup(order) ? "pickup" : "delivery"}">${orderTypeLabel(order)}</div>
         <div class="order-info">
           <span class="mobile-label">Cliente</span>
           <strong>${order.customer}</strong>
@@ -236,10 +261,12 @@ function renderEvents() {
 
 async function loadOrders() {
   try {
-    const response = await fetch("/api/orders");
+    const response = await fetch(shouldSyncOnNextOrdersLoad ? "/api/orders?sync=1" : "/api/orders");
+    shouldSyncOnNextOrdersLoad = false;
     const data = await response.json();
     orders = Array.isArray(data.orders) ? data.orders : [];
   } catch (error) {
+    shouldSyncOnNextOrdersLoad = false;
     orders = [];
   }
 
