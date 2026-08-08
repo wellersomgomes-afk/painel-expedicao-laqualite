@@ -29,6 +29,7 @@ let isMenuHidden = localStorage.getItem("kdsMenuHidden") === "true";
 let isSettingsOpen = false;
 let searchOrderNumber = localStorage.getItem("kdsSearchOrderNumber") || "";
 let shouldSyncOnNextKdsLoad = true;
+const selectedDispatchOrders = new Set();
 
 if (activeView === "dispatch") {
   activeView = "ready";
@@ -105,6 +106,10 @@ function duplicateKeyCounts(sourceOrders, keyFactory) {
 
 function orderDuplicateId(order) {
   return String(order.orderId || order.number || "");
+}
+
+function dispatchSelectionId(order) {
+  return orderDuplicateId(order);
 }
 
 function duplicateNearbyOrders(sourceOrders) {
@@ -391,16 +396,31 @@ function renderDispatchOrder(order, duplicateInfo = duplicateSignals([])) {
   const service = isPickup ? "Retirada" : order.neighborhood || "Entrega";
   const buttonLabel = isPickup ? "Pronto para retirada" : "Despachar";
   const isDuplicate = isPossibleDuplicate(order, duplicateInfo);
+  const selectionId = dispatchSelectionId(order);
+  const canBulkDispatch = isDispatchMode() && activeService === "delivery" && !isPickup;
+  const isSelected = canBulkDispatch && selectedDispatchOrders.has(selectionId);
 
   return `
-    <article class="dispatch-card${isDuplicate ? " has-duplicate-customer" : ""}" data-number="${order.number}" data-order-id="${order.orderId || ""}">
+    <article class="dispatch-card${isDuplicate ? " has-duplicate-customer" : ""}${isSelected ? " is-selected" : ""}" data-number="${order.number}" data-order-id="${order.orderId || ""}">
       <header class="dispatch-card-head">
         <div class="dispatch-main">
           <strong>#${order.number}</strong>
           <span>${order.customer || "Não informado"}</span>
           ${isDuplicate ? '<em class="duplicate-alert kds-duplicate-alert">Possível duplicado</em>' : ""}
         </div>
-        <div class="dispatch-time">${formatTimer(order)}</div>
+        <div class="dispatch-head-actions">
+          <div class="dispatch-time">${formatTimer(order)}</div>
+          ${canBulkDispatch ? `
+            <button
+              class="dispatch-select-button"
+              type="button"
+              data-selection-id="${selectionId}"
+              aria-pressed="${isSelected}"
+            >
+              ${isSelected ? "Selecionado" : "Selecionar"}
+            </button>
+          ` : ""}
+        </div>
       </header>
       <button
         class="kds-dispatch-button dispatch-top-action${isPickup ? " pickup" : ""}"
@@ -446,6 +466,34 @@ function renderOrderSection(title, orders, renderer = renderOrder, duplicateInfo
       </header>
       <div class="kds-section-grid">
         ${orders.map((order) => renderer(order, duplicateInfo)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderBulkDispatchBar(orders) {
+  const deliveryOrders = orders.filter((order) => !isPickupOrder(order));
+  const validIds = new Set(deliveryOrders.map(dispatchSelectionId));
+
+  [...selectedDispatchOrders].forEach((id) => {
+    if (!validIds.has(id)) {
+      selectedDispatchOrders.delete(id);
+    }
+  });
+
+  const selectedCount = deliveryOrders.filter((order) => selectedDispatchOrders.has(dispatchSelectionId(order))).length;
+  const hasOrders = deliveryOrders.length > 0;
+
+  return `
+    <section class="bulk-dispatch-bar" aria-label="Despacho em massa">
+      <div>
+        <strong>Despacho em massa</strong>
+        <span>${selectedCount} de ${deliveryOrders.length} entregas selecionadas</span>
+      </div>
+      <div class="bulk-dispatch-actions">
+        <button class="bulk-select-all" type="button" ${hasOrders ? "" : "disabled"}>Selecionar ate 6</button>
+        <button class="bulk-clear-selection" type="button" ${selectedCount ? "" : "disabled"}>Limpar</button>
+        <button class="bulk-dispatch-button" type="button" ${selectedCount ? "" : "disabled"}>Despachar selecionados</button>
       </div>
     </section>
   `;
@@ -609,7 +657,7 @@ function renderKds() {
     }
 
     const dispatchTitle = activeService === "pickup" ? "Retiradas prontas" : "Entregas prontas";
-    grid.innerHTML = renderOrderSection(dispatchTitle, orders, renderDispatchOrder, duplicateInfo);
+    grid.innerHTML = `${activeService === "delivery" ? renderBulkDispatchBar(orders) : ""}${renderOrderSection(dispatchTitle, orders, renderDispatchOrder, duplicateInfo)}`;
     return;
   }
 
@@ -729,6 +777,52 @@ async function dispatchReadyOrder(button) {
   }
 }
 
+async function dispatchSelectedOrders(button) {
+  const selectedIds = new Set(selectedDispatchOrders);
+  const selectedOrders = currentOrders()
+    .filter((order) => !isPickupOrder(order))
+    .filter((order) => selectedIds.has(dispatchSelectionId(order)))
+    .slice(0, 6);
+
+  if (selectedOrders.length === 0) {
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = `Despachando ${selectedOrders.length}...`;
+  let failedMessage = "";
+
+  for (const order of selectedOrders) {
+    try {
+      const response = await fetch("/api/kds-dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          number: order.number,
+          orderId: order.orderId || "",
+          action: "dispatch",
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.message || `Falha ao despachar o pedido #${order.number}`);
+      }
+
+      selectedDispatchOrders.delete(dispatchSelectionId(order));
+    } catch (error) {
+      failedMessage = error.message || `Falha ao despachar o pedido #${order.number}`;
+      break;
+    }
+  }
+
+  await loadKdsOrders();
+
+  if (failedMessage) {
+    alert(failedMessage);
+  }
+}
+
 sizeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     cardSize = button.dataset.size;
@@ -761,6 +855,7 @@ serviceTabs.forEach((button) => {
   button.addEventListener("click", () => {
     activeService = button.dataset.service;
     localStorage.setItem("kdsActiveService", activeService);
+    selectedDispatchOrders.clear();
     renderKds();
   });
 });
@@ -833,6 +928,10 @@ grid.addEventListener("click", (event) => {
   const itemButton = event.target.closest(".kds-item-ready-button");
   const orderButton = event.target.closest(".kds-ready-button");
   const dispatchButton = event.target.closest(".kds-dispatch-button");
+  const selectDispatchButton = event.target.closest(".dispatch-select-button");
+  const bulkSelectAllButton = event.target.closest(".bulk-select-all");
+  const bulkClearButton = event.target.closest(".bulk-clear-selection");
+  const bulkDispatchButton = event.target.closest(".bulk-dispatch-button");
 
   if (itemButton) {
     markItemReady(itemButton);
@@ -841,6 +940,41 @@ grid.addEventListener("click", (event) => {
 
   if (orderButton) {
     markOrderReady(orderButton);
+    return;
+  }
+
+  if (selectDispatchButton) {
+    const selectionId = selectDispatchButton.dataset.selectionId;
+
+    if (selectedDispatchOrders.has(selectionId)) {
+      selectedDispatchOrders.delete(selectionId);
+    } else if (selectedDispatchOrders.size >= 6) {
+      alert("Selecione no maximo 6 entregas por vez.");
+    } else {
+      selectedDispatchOrders.add(selectionId);
+    }
+
+    renderKds();
+    return;
+  }
+
+  if (bulkSelectAllButton) {
+    currentOrders()
+      .filter((order) => !isPickupOrder(order))
+      .slice(0, 6)
+      .forEach((order) => selectedDispatchOrders.add(dispatchSelectionId(order)));
+    renderKds();
+    return;
+  }
+
+  if (bulkClearButton) {
+    selectedDispatchOrders.clear();
+    renderKds();
+    return;
+  }
+
+  if (bulkDispatchButton) {
+    dispatchSelectedOrders(bulkDispatchButton);
     return;
   }
 
