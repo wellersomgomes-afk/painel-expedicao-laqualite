@@ -392,14 +392,51 @@ function removeKdsReadyOrder(order) {
   writeKdsReadyOrders(readyOrders);
 }
 
-function notifyCardapioDispatchSafely(order, action) {
+function cardapioStatusUrl(order, statusAction) {
+  const orderURL = cardapioOrderUrl(order).replace(/\/$/, "");
+  const endpoint = statusAction === "pickup-ready" ? "readyForPickup" : "dispatch";
+
+  return `${orderURL}/${endpoint}`;
+}
+
+async function notifyCardapioDispatch(order, action) {
+  const statusURL = cardapioStatusUrl(order, action);
+  const token = await getCardapioToken(statusURL);
+  const response = await fetch(statusURL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`${statusURL} retornou HTTP ${response.status}${body ? `: ${body.slice(0, 300)}` : ""}`);
+  }
+
   return {
     ok: true,
-    action: "cardapio-dispatch-skipped",
+    action: action === "pickup-ready" ? "cardapio-ready-for-pickup" : "cardapio-dispatch",
     order: order.number,
     dispatchAction: action,
-    message: "Despacho mantido apenas interno. Configure o endpoint do Cardapio Web para envio automatico.",
   };
+}
+
+async function notifyCardapioDispatchSafely(order, action) {
+  try {
+    return await notifyCardapioDispatch(order, action);
+  } catch (error) {
+    return {
+      ok: false,
+      action: action === "pickup-ready" ? "cardapio-ready-for-pickup-failed" : "cardapio-dispatch-failed",
+      order: order.number,
+      dispatchAction: action,
+      message: error.message,
+    };
+  }
 }
 
 async function dispatchKdsReadyOrder(target) {
@@ -420,12 +457,23 @@ async function dispatchKdsReadyOrder(target) {
   const action = target.action === "pickup-ready" ? "pickup-ready" : "dispatch";
   const eventType = action === "pickup-ready" ? "READY_FOR_PICKUP" : "DISPATCHED";
 
+  const cardapioResult = await notifyCardapioDispatchSafely(order, action);
+  recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-dispatch", action }, cardapioResult);
+
+  if (!cardapioResult.ok) {
+    return {
+      ok: false,
+      message: cardapioResult.message || "Nao foi possivel atualizar o Cardapio Web.",
+      action,
+      order: order.number,
+      cardapio: cardapioResult,
+    };
+  }
+
   orders.splice(orderIndex, 1);
   writeOrders(orders);
   removeKdsReadyOrder(order);
   recordDispatchedOrder(order, { action, eventType });
-  const cardapioResult = notifyCardapioDispatchSafely(order, action);
-  recordSystemEvent({ order: order.number, orderId: order.orderId, source: "kds-dispatch", action }, cardapioResult);
 
   return {
     ok: true,

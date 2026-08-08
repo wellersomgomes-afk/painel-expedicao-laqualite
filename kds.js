@@ -715,15 +715,17 @@ async function dispatchReadyOrder(button) {
         action: button.dataset.action,
       }),
     });
+    const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error("Falha no despacho");
+      throw new Error(result.message || "Falha no despacho");
     }
 
     await loadKdsOrders();
   } catch (error) {
     button.disabled = false;
     button.textContent = button.dataset.action === "pickup-ready" ? "Pronto para retirada" : "Despachar";
+    alert(error.message || "Nao foi possivel atualizar o Cardapio Web.");
   }
 }
 
