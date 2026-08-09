@@ -88,6 +88,41 @@ h1 {
   color: #101318;
 }
 
+.config-menu {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.config-toggle {
+  width: 100%;
+}
+
+.config-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: min(320px, 78vw);
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.config-options[hidden] {
+  display: none;
+}
+
+.config-option {
+  width: 100%;
+  min-height: 48px;
+  background: var(--panel);
+}
+
 .panel-link {
   min-width: 170px;
   min-height: 58px;
@@ -2046,6 +2081,16 @@ h1 {
 
   .tabs {
     display: grid;
+  }
+
+  .config-menu {
+    width: 100%;
+  }
+
+  .config-options {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
   }
 
   .tab {

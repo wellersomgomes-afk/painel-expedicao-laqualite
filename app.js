@@ -44,6 +44,8 @@ const monitorStorageCard = document.querySelector("#monitor-storage-card");
 const monitorActionsCard = document.querySelector("#monitor-actions-card");
 const monitorWritesCard = document.querySelector("#monitor-writes-card");
 const tabs = document.querySelectorAll(".tab");
+const configToggle = document.querySelector("#config-toggle");
+const configOptions = document.querySelector("#config-options");
 const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
 const fullscreenButton = document.querySelector("#fullscreen-button");
@@ -518,6 +520,19 @@ function connectLiveUpdates() {
   source.addEventListener("update", scheduleLiveRefresh);
 }
 
+function isConfigFilter(filter) {
+  return ["settings", "monitor", "events"].includes(filter);
+}
+
+function setConfigMenuOpen(isOpen) {
+  if (!configToggle || !configOptions) {
+    return;
+  }
+
+  configOptions.hidden = !isOpen;
+  configToggle.setAttribute("aria-expanded", String(isOpen));
+}
+
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     if (tab.id === "fullscreen-button") {
@@ -525,9 +540,16 @@ tabs.forEach((tab) => {
       return;
     }
 
+    if (tab.id === "config-toggle") {
+      setConfigMenuOpen(configOptions?.hidden);
+      return;
+    }
+
     activeFilter = tab.dataset.filter;
+    setConfigMenuOpen(false);
 
     tabs.forEach((item) => item.classList.toggle("active", item === tab));
+    configToggle?.classList.toggle("active", isConfigFilter(activeFilter));
     renderOrders();
   });
 });

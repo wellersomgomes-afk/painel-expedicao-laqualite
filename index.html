@@ -20,9 +20,14 @@
           <button class="tab" type="button" data-filter="pickup">Retirada</button>
           <button class="tab" type="button" data-filter="late">Atrasados</button>
           <button class="tab" type="button" data-filter="dispatched">Despachados</button>
-          <button class="tab" type="button" data-filter="settings">Tempo</button>
-          <button class="tab" type="button" data-filter="monitor">Monitoramento</button>
-          <button class="tab" type="button" data-filter="events">Eventos</button>
+          <div class="config-menu">
+            <button class="tab config-toggle" id="config-toggle" type="button" aria-expanded="false">Configurações</button>
+            <div class="config-options" id="config-options" hidden>
+              <button class="tab config-option" type="button" data-filter="settings">Tempo</button>
+              <button class="tab config-option" type="button" data-filter="monitor">Monitoramento</button>
+              <button class="tab config-option" type="button" data-filter="events">Eventos</button>
+            </div>
+          </div>
           <button class="tab fullscreen-tab" id="fullscreen-button" type="button">Tela cheia</button>
         </nav>
       </header>
