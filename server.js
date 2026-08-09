@@ -26,6 +26,12 @@ const APP_TIME_ZONE = "America/Sao_Paulo";
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 const orderLocks = new Map();
+const storageCache = new Map();
+const storageWriteQueues = new Map();
+let storageMode = "json";
+let storageDb = null;
+let storageReady = false;
+let storageError = "";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -81,10 +87,127 @@ function defaultJsonValue(filePath) {
 
 function writeJsonFile(filePath, data) {
   ensureDataFile();
+  const key = storageKeyFromFile(filePath);
+
+  if (storageMode === "postgres" && storageReady && key) {
+    storageCache.set(key, cloneJson(data));
+    queueStorageWrite(key, data);
+    return;
+  }
+
+  writeJsonFileDirect(filePath, data);
+}
+
+function writeJsonFileDirect(filePath, data) {
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
 
   fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
   fs.renameSync(tempPath, filePath);
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function storageKeyFromFile(filePath) {
+  return path.basename(filePath, ".json");
+}
+
+function storageFileEntries() {
+  return [
+    [storageKeyFromFile(ORDERS_FILE), ORDERS_FILE],
+    [storageKeyFromFile(EVENTS_FILE), EVENTS_FILE],
+    [storageKeyFromFile(DISPATCHED_FILE), DISPATCHED_FILE],
+    [storageKeyFromFile(KDS_READY_FILE), KDS_READY_FILE],
+    [storageKeyFromFile(PDV_PRODUCT_SECTORS_FILE), PDV_PRODUCT_SECTORS_FILE],
+    [storageKeyFromFile(CATEGORY_SECTORS_FILE), CATEGORY_SECTORS_FILE],
+    [storageKeyFromFile(DRIVERS_FILE), DRIVERS_FILE],
+  ];
+}
+
+async function initializeStorage() {
+  ensureDataFile();
+
+  if (!process.env.DATABASE_URL) {
+    storageMode = "json";
+    storageReady = true;
+    return;
+  }
+
+  try {
+    const { Pool } = require("pg");
+    storageDb = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.RENDER ? { rejectUnauthorized: false } : undefined,
+    });
+
+    await storageDb.query(`
+      CREATE TABLE IF NOT EXISTS app_state (
+        key text PRIMARY KEY,
+        data jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+
+    for (const [key, filePath] of storageFileEntries()) {
+      const dbResult = await storageDb.query("SELECT data FROM app_state WHERE key = $1", [key]);
+
+      if (dbResult.rows.length) {
+        storageCache.set(key, dbResult.rows[0].data);
+        continue;
+      }
+
+      const fileData = readJsonFileDirect(filePath);
+      storageCache.set(key, fileData);
+      await persistStorageValue(key, fileData);
+    }
+
+    storageMode = "postgres";
+    storageReady = true;
+  } catch (error) {
+    storageMode = "json";
+    storageReady = true;
+    storageError = error.message;
+    console.warn("PostgreSQL indisponivel, usando arquivos JSON:", error.message);
+  }
+}
+
+async function persistStorageValue(key, data) {
+  if (!storageDb) {
+    return;
+  }
+
+  await storageDb.query(
+    `
+      INSERT INTO app_state (key, data, updated_at)
+      VALUES ($1, $2::jsonb, now())
+      ON CONFLICT (key)
+      DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+    `,
+    [key, JSON.stringify(data)]
+  );
+}
+
+function queueStorageWrite(key, data) {
+  if (!storageDb) {
+    return;
+  }
+
+  const previous = storageWriteQueues.get(key) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => persistStorageValue(key, data))
+    .catch((error) => {
+      storageError = error.message;
+      console.error("Falha ao salvar no PostgreSQL:", error.message);
+    })
+    .finally(() => {
+      if (storageWriteQueues.get(key) === next) {
+        storageWriteQueues.delete(key);
+      }
+    });
+
+  storageWriteQueues.set(key, next);
 }
 
 function orderLockKey(target) {
@@ -617,6 +740,16 @@ async function dispatchKdsReadyOrder(target) {
 }
 
 function readJsonFile(filePath) {
+  const key = storageKeyFromFile(filePath);
+
+  if (storageMode === "postgres" && storageReady && key && storageCache.has(key)) {
+    return cloneJson(storageCache.get(key));
+  }
+
+  return readJsonFileDirect(filePath);
+}
+
+function readJsonFileDirect(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
   } catch (error) {
@@ -627,7 +760,7 @@ function readJsonFile(filePath) {
       if (fs.existsSync(filePath)) {
         fs.copyFileSync(filePath, corruptPath);
       }
-      writeJsonFile(filePath, fallback);
+      writeJsonFileDirect(filePath, fallback);
     } catch (writeError) {
       return fallback;
     }
@@ -688,9 +821,13 @@ function sendJson(response, statusCode, data) {
 function healthSnapshot() {
   return {
     ok: true,
+    storage: storageMode,
+    storageReady,
+    storageError,
     updatedAt: formatLocalDateTime(),
     uptimeSeconds: Math.floor(process.uptime()),
     pendingOrderActions: orderLocks.size,
+    pendingStorageWrites: storageWriteQueues.size,
     orders: readOrders().length,
     readyOrders: readKdsReadyOrders().length,
     dispatchedOrders: readDispatchedOrders().length,
@@ -2559,9 +2696,12 @@ const server = http.createServer(async (request, response) => {
   serveStatic(request, response);
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Painel rodando em http://localhost:${PORT}`);
-  console.log(`Webhook local: http://localhost:${PORT}/api/webhook/cardapio-web`);
-  setTimeout(syncOpenOrdersSafely, 5000);
-  setInterval(syncOpenOrdersSafely, SYNC_OPEN_ORDERS_INTERVAL_MS);
+initializeStorage().then(() => {
+  server.listen(PORT, HOST, () => {
+    console.log(`Painel rodando em http://localhost:${PORT}`);
+    console.log(`Webhook local: http://localhost:${PORT}/api/webhook/cardapio-web`);
+    console.log(`Armazenamento: ${storageMode}`);
+    setTimeout(syncOpenOrdersSafely, 5000);
+    setInterval(syncOpenOrdersSafely, SYNC_OPEN_ORDERS_INTERVAL_MS);
+  });
 });
