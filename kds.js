@@ -734,9 +734,7 @@ function currentOrders() {
       return dispatchMode ? filterOrderForDispatch(order) : filterOrderForSector(order);
     })
     .filter(Boolean)
-    .sort((left, right) => dispatchedMode
-      ? Number(right.dispatchedAt || 0) - Number(left.dispatchedAt || 0)
-      : Number(left.number || 0) - Number(right.number || 0));
+    .sort((left, right) => Number(left.number || 0) - Number(right.number || 0));
 }
 
 function ordersForSummary(sourceOrders, { dispatchMode = false } = {}) {

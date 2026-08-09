@@ -1,1 +1,59 @@
-[]
+[
+  {
+    "receivedAt": "08/08/2026, 10:34:40",
+    "method": "SYSTEM",
+    "path": "/sync-open-orders",
+    "result": {
+      "ok": false,
+      "action": "cardapio-dispatch-failed",
+      "order": "2004",
+      "dispatchAction": "dispatch",
+      "message": "Credenciais do Cardapio Web nao configuradas no Render."
+    },
+    "body": {
+      "order": "2004",
+      "orderId": "teste-entrega-2004",
+      "source": "kds-dispatch",
+      "action": "dispatch",
+      "driverName": "Wagner"
+    }
+  },
+  {
+    "receivedAt": "08/08/2026, 10:26:52",
+    "method": "SYSTEM",
+    "path": "/sync-open-orders",
+    "result": {
+      "ok": false,
+      "action": "cardapio-dispatch-failed",
+      "order": "2005",
+      "dispatchAction": "dispatch",
+      "message": "Credenciais do Cardapio Web nao configuradas no Render."
+    },
+    "body": {
+      "order": "2005",
+      "orderId": "teste-entrega-2005",
+      "source": "kds-dispatch",
+      "action": "dispatch",
+      "driverName": "Celso"
+    }
+  },
+  {
+    "receivedAt": "08/08/2026, 10:19:05",
+    "method": "SYSTEM",
+    "path": "/sync-open-orders",
+    "result": {
+      "ok": false,
+      "action": "cardapio-dispatch-failed",
+      "order": "2001",
+      "dispatchAction": "dispatch",
+      "message": "Credenciais do Cardapio Web nao configuradas no Render."
+    },
+    "body": {
+      "order": "2001",
+      "orderId": "teste-entrega-2001",
+      "source": "kds-dispatch",
+      "action": "dispatch",
+      "driverName": "Celso"
+    }
+  }
+]

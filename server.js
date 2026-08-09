@@ -25,6 +25,7 @@ const APP_TIME_ZONE = "America/Sao_Paulo";
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
+const orderLocks = new Map();
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -70,6 +71,47 @@ function ensureDataFile() {
   }
 }
 
+function defaultJsonValue(filePath) {
+  if (filePath === PDV_PRODUCT_SECTORS_FILE || filePath === CATEGORY_SECTORS_FILE) {
+    return { esfihas: [], porcoes: [] };
+  }
+
+  return [];
+}
+
+function writeJsonFile(filePath, data) {
+  ensureDataFile();
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
+  fs.renameSync(tempPath, filePath);
+}
+
+function orderLockKey(target) {
+  return String(target?.orderId || target?.number || "");
+}
+
+async function withOrderLock(target, task) {
+  const key = orderLockKey(target);
+
+  if (!key) {
+    return task();
+  }
+
+  const previous = orderLocks.get(key) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(task)
+    .finally(() => {
+      if (orderLocks.get(key) === next) {
+        orderLocks.delete(key);
+      }
+    });
+
+  orderLocks.set(key, next);
+  return next;
+}
+
 function readOrders() {
   ensureDataFile();
   const orders = readJsonFile(ORDERS_FILE);
@@ -100,8 +142,7 @@ function readOrders() {
 }
 
 function writeOrders(orders) {
-  ensureDataFile();
-  fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+  writeJsonFile(ORDERS_FILE, orders);
 }
 
 function readEvents() {
@@ -110,8 +151,7 @@ function readEvents() {
 }
 
 function writeEvents(events) {
-  ensureDataFile();
-  fs.writeFileSync(EVENTS_FILE, JSON.stringify(events.slice(0, 30), null, 2));
+  writeJsonFile(EVENTS_FILE, events.slice(0, 30));
 }
 
 function readDispatchedOrders() {
@@ -125,8 +165,7 @@ function readDrivers() {
 }
 
 function writeDrivers(drivers) {
-  ensureDataFile();
-  fs.writeFileSync(DRIVERS_FILE, JSON.stringify(drivers, null, 2));
+  writeJsonFile(DRIVERS_FILE, drivers);
 }
 
 function normalizeDriverName(value) {
@@ -271,8 +310,7 @@ function sectorsFromCategoryIds(categoryIds) {
 }
 
 function writeDispatchedOrders(orders) {
-  ensureDataFile();
-  fs.writeFileSync(DISPATCHED_FILE, JSON.stringify(orders.slice(0, 50), null, 2));
+  writeJsonFile(DISPATCHED_FILE, orders.slice(0, 50));
 }
 
 function readKdsReadyOrders() {
@@ -281,8 +319,7 @@ function readKdsReadyOrders() {
 }
 
 function writeKdsReadyOrders(orders) {
-  ensureDataFile();
-  fs.writeFileSync(KDS_READY_FILE, JSON.stringify(orders.slice(0, 300), null, 2));
+  writeJsonFile(KDS_READY_FILE, orders.slice(0, 300));
 }
 
 function isSameOrder(left, right) {
@@ -429,11 +466,11 @@ async function saveKdsReadyItems(target, source) {
 }
 
 async function markKdsOrderReady(target) {
-  return saveKdsReadyItems(target, "kds-ready");
+  return withOrderLock(target, () => saveKdsReadyItems(target, "kds-ready"));
 }
 
 async function markKdsItemReady(target) {
-  return saveKdsReadyItems(target, "kds-item-ready");
+  return withOrderLock(target, () => saveKdsReadyItems(target, "kds-item-ready"));
 }
 
 function recordDispatchedOrder(order, payload) {
@@ -476,6 +513,16 @@ function cardapioStatusUrl(order, statusAction) {
 }
 
 async function notifyCardapioDispatch(order, action) {
+  if (String(order.orderId || "").startsWith("teste-")) {
+    return {
+      ok: true,
+      action: action === "pickup-ready" ? "local-test-ready-for-pickup" : "local-test-dispatch",
+      order: order.number,
+      dispatchAction: action,
+      message: "Pedido teste despachado apenas no localhost.",
+    };
+  }
+
   const statusURL = cardapioStatusUrl(order, action);
   const token = await getCardapioToken(statusURL);
   const response = await fetch(statusURL, {
@@ -516,6 +563,7 @@ async function notifyCardapioDispatchSafely(order, action) {
 }
 
 async function dispatchKdsReadyOrder(target) {
+  return withOrderLock(target, async () => {
   const orders = readOrders();
   const orderIndex = orders.findIndex((item) => isSameOrder(item, target));
   const order = orders[orderIndex];
@@ -565,10 +613,27 @@ async function dispatchKdsReadyOrder(target) {
     order: order.number,
     cardapio: cardapioResult,
   };
+  });
 }
 
 function readJsonFile(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, ""));
+  } catch (error) {
+    const fallback = defaultJsonValue(filePath);
+    const corruptPath = `${filePath}.corrupt-${Date.now()}`;
+
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.copyFileSync(filePath, corruptPath);
+      }
+      writeJsonFile(filePath, fallback);
+    } catch (writeError) {
+      return fallback;
+    }
+
+    return fallback;
+  }
 }
 
 function formatLocalDateTime(value = Date.now()) {
@@ -618,6 +683,19 @@ function recordSystemEvent(body, result) {
 function sendJson(response, statusCode, data) {
   response.writeHead(statusCode, { "Content-Type": contentTypes[".json"] });
   response.end(JSON.stringify(data));
+}
+
+function healthSnapshot() {
+  return {
+    ok: true,
+    updatedAt: formatLocalDateTime(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    pendingOrderActions: orderLocks.size,
+    orders: readOrders().length,
+    readyOrders: readKdsReadyOrders().length,
+    dispatchedOrders: readDispatchedOrders().length,
+    drivers: readDrivers().length,
+  };
 }
 
 function readBody(request) {
@@ -2320,7 +2398,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -2336,6 +2414,11 @@ const server = http.createServer(async (request, response) => {
       ? await syncOpenOrdersForPageLoad()
       : null;
     sendJson(response, 200, { orders: ordersWithKdsStatus(), sync });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/health") {
+    sendJson(response, 200, healthSnapshot());
     return;
   }
 
