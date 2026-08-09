@@ -7,6 +7,8 @@ let lateLimitMinutes = Number.isFinite(savedLateLimit) && savedLateLimit > 0
 let orders = [];
 let dispatchedOrders = [];
 let events = [];
+let health = null;
+let monitorMessage = "";
 
 let activeFilter = "all";
 let shouldSyncOnNextOrdersLoad = true;
@@ -18,10 +20,29 @@ const dispatchedPanel = document.querySelector("#dispatched-panel");
 const dispatchedList = document.querySelector("#dispatched-list");
 const settingsPanel = document.querySelector("#settings-panel");
 const eventsPanel = document.querySelector("#events-panel");
+const monitorPanel = document.querySelector("#monitor-panel");
 const totalCount = document.querySelector("#total-count");
 const lateCount = document.querySelector("#late-count");
 const eventsCount = document.querySelector("#events-count");
 const eventsList = document.querySelector("#events-list");
+const monitorMainStatus = document.querySelector("#monitor-main-status");
+const monitorSystem = document.querySelector("#monitor-system");
+const monitorStorage = document.querySelector("#monitor-storage");
+const monitorScreens = document.querySelector("#monitor-screens");
+const monitorOrders = document.querySelector("#monitor-orders");
+const monitorReady = document.querySelector("#monitor-ready");
+const monitorDispatched = document.querySelector("#monitor-dispatched");
+const monitorPendingActions = document.querySelector("#monitor-pending-actions");
+const monitorPendingWrites = document.querySelector("#monitor-pending-writes");
+const monitorUpdated = document.querySelector("#monitor-updated");
+const monitorError = document.querySelector("#monitor-error");
+const monitorLastEvent = document.querySelector("#monitor-last-event");
+const monitorRefresh = document.querySelector("#monitor-refresh");
+const monitorSync = document.querySelector("#monitor-sync");
+const monitorSystemCard = document.querySelector("#monitor-system-card");
+const monitorStorageCard = document.querySelector("#monitor-storage-card");
+const monitorActionsCard = document.querySelector("#monitor-actions-card");
+const monitorWritesCard = document.querySelector("#monitor-writes-card");
 const tabs = document.querySelectorAll(".tab");
 const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
@@ -210,6 +231,7 @@ async function toggleFullscreen() {
 function renderOrders() {
   const isSettingsOpen = activeFilter === "settings";
   const isEventsOpen = activeFilter === "events";
+  const isMonitorOpen = activeFilter === "monitor";
   const isDispatchedOpen = activeFilter === "dispatched";
   const activeOrders = [...orders].sort((a, b) => elapsedSeconds(b) - elapsedSeconds(a));
   const duplicateInfo = duplicateSignals(activeOrders);
@@ -229,10 +251,11 @@ function renderOrders() {
   lateCount.textContent = String(lateOrders.length);
   limitInput.value = String(lateLimitMinutes);
   limitLabel.textContent = String(lateLimitMinutes);
-  ordersPanel.hidden = isSettingsOpen || isEventsOpen || isDispatchedOpen;
+  ordersPanel.hidden = isSettingsOpen || isEventsOpen || isMonitorOpen || isDispatchedOpen;
   dispatchedPanel.hidden = !isDispatchedOpen;
   settingsPanel.hidden = !isSettingsOpen;
   eventsPanel.hidden = !isEventsOpen;
+  monitorPanel.hidden = !isMonitorOpen;
 
   if (isDispatchedOpen) {
     renderDispatchedOrders();
@@ -241,6 +264,11 @@ function renderOrders() {
 
   if (isEventsOpen) {
     renderEvents();
+    return;
+  }
+
+  if (isMonitorOpen) {
+    renderMonitor();
     return;
   }
 
@@ -353,6 +381,44 @@ function renderEvents() {
     .join("");
 }
 
+function setMonitorCardState(card, state) {
+  if (!card) {
+    return;
+  }
+
+  card.classList.toggle("ok", state === "ok");
+  card.classList.toggle("warning", state === "warning");
+  card.classList.toggle("danger", state === "danger");
+}
+
+function renderMonitor() {
+  const lastEvent = events[0];
+  const isStorageOk = health?.storage === "postgres" && health?.storageReady && !health?.storageError;
+  const pendingActions = Number(health?.pendingOrderActions || 0);
+  const pendingWrites = Number(health?.pendingStorageWrites || 0);
+  const isSystemOk = Boolean(health?.ok) && isStorageOk && pendingActions === 0 && pendingWrites === 0;
+
+  monitorMainStatus.textContent = monitorMessage || (isSystemOk ? "Sistema saudável" : "Atenção necessária");
+  monitorSystem.textContent = health?.ok ? "Online" : "Sem resposta";
+  monitorStorage.textContent = isStorageOk ? "PostgreSQL conectado" : "Verificar banco";
+  monitorScreens.textContent = String(health?.connectedScreens ?? 0);
+  monitorOrders.textContent = String(health?.orders ?? orders.length);
+  monitorReady.textContent = String(health?.readyOrders ?? 0);
+  monitorDispatched.textContent = String(health?.dispatchedOrders ?? dispatchedOrders.length);
+  monitorPendingActions.textContent = String(pendingActions);
+  monitorPendingWrites.textContent = String(pendingWrites);
+  monitorUpdated.textContent = health?.updatedAt || "--";
+  monitorError.textContent = health?.storageError || "Nenhum erro";
+  monitorLastEvent.textContent = lastEvent
+    ? `${lastEvent.receivedAt} - ${lastEvent.result?.action || lastEvent.result?.message || lastEvent.path}`
+    : "Nenhum evento recente";
+
+  setMonitorCardState(monitorSystemCard, health?.ok ? "ok" : "danger");
+  setMonitorCardState(monitorStorageCard, isStorageOk ? "ok" : "danger");
+  setMonitorCardState(monitorActionsCard, pendingActions === 0 ? "ok" : "warning");
+  setMonitorCardState(monitorWritesCard, pendingWrites === 0 ? "ok" : "warning");
+}
+
 async function loadOrders() {
   try {
     const response = await fetch(shouldSyncOnNextOrdersLoad ? "/api/orders?sync=1" : "/api/orders");
@@ -391,12 +457,55 @@ async function loadDispatchedOrders() {
   renderOrders();
 }
 
+async function loadHealth() {
+  try {
+    const response = await fetch("/api/health");
+    health = await response.json();
+  } catch (error) {
+    health = {
+      ok: false,
+      storage: "--",
+      storageReady: false,
+      storageError: "Painel sem resposta no monitoramento.",
+    };
+  }
+
+  renderOrders();
+}
+
+async function syncNow() {
+  if (!monitorSync) {
+    return;
+  }
+
+  monitorSync.disabled = true;
+  monitorMessage = "Sincronizando pedidos...";
+  renderMonitor();
+
+  try {
+    const response = await fetch("/api/sync-open-orders", { method: "POST" });
+    const result = await response.json();
+    monitorMessage = result.ok ? "Sincronização concluída" : result.message || "Falha na sincronização";
+  } catch (error) {
+    monitorMessage = "Falha ao chamar sincronização";
+  }
+
+  await Promise.all([loadOrders(), loadEvents(), loadDispatchedOrders(), loadHealth()]);
+  monitorSync.disabled = false;
+
+  setTimeout(() => {
+    monitorMessage = "";
+    renderMonitor();
+  }, 4000);
+}
+
 function scheduleLiveRefresh() {
   clearTimeout(liveRefreshTimer);
   liveRefreshTimer = setTimeout(() => {
     loadOrders();
     loadDispatchedOrders();
     loadEvents();
+    loadHealth();
   }, 150);
 }
 
@@ -427,6 +536,19 @@ if (fullscreenButton) {
   document.addEventListener("fullscreenchange", updateFullscreenButton);
 }
 
+if (monitorRefresh) {
+  monitorRefresh.addEventListener("click", () => {
+    loadOrders();
+    loadDispatchedOrders();
+    loadEvents();
+    loadHealth();
+  });
+}
+
+if (monitorSync) {
+  monitorSync.addEventListener("click", syncNow);
+}
+
 limitInput.addEventListener("input", () => {
   const nextLimit = Number(limitInput.value);
 
@@ -443,8 +565,10 @@ loadOrders();
 updateFullscreenButton();
 loadDispatchedOrders();
 loadEvents();
+loadHealth();
 connectLiveUpdates();
 setInterval(loadOrders, 5000);
 setInterval(loadDispatchedOrders, 5000);
 setInterval(loadEvents, 5000);
+setInterval(loadHealth, 5000);
 setInterval(renderOrders, 1000);

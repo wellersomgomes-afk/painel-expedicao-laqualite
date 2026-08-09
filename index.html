@@ -21,6 +21,7 @@
           <button class="tab" type="button" data-filter="late">Atrasados</button>
           <button class="tab" type="button" data-filter="dispatched">Despachados</button>
           <button class="tab" type="button" data-filter="settings">Tempo</button>
+          <button class="tab" type="button" data-filter="monitor">Monitoramento</button>
           <button class="tab" type="button" data-filter="events">Eventos</button>
           <button class="tab fullscreen-tab" id="fullscreen-button" type="button">Tela cheia</button>
         </nav>
@@ -47,6 +48,69 @@
           <span>Minutos para considerar atrasado</span>
           <input id="limit-input" type="number" min="5" max="120" step="1" value="30" />
         </label>
+      </section>
+
+      <section class="monitor-panel" id="monitor-panel" aria-label="Monitoramento do sistema" hidden>
+        <div class="monitor-head">
+          <div>
+            <span>Monitoramento do sistema</span>
+            <strong id="monitor-main-status">Verificando...</strong>
+          </div>
+          <div class="monitor-actions">
+            <button id="monitor-refresh" type="button">Atualizar</button>
+            <button id="monitor-sync" type="button">Sincronizar agora</button>
+          </div>
+        </div>
+
+        <div class="monitor-grid">
+          <article class="monitor-card" id="monitor-system-card">
+            <span>Sistema</span>
+            <strong id="monitor-system">--</strong>
+          </article>
+          <article class="monitor-card" id="monitor-storage-card">
+            <span>Banco</span>
+            <strong id="monitor-storage">--</strong>
+          </article>
+          <article class="monitor-card">
+            <span>Telas conectadas</span>
+            <strong id="monitor-screens">0</strong>
+          </article>
+          <article class="monitor-card">
+            <span>Pedidos ativos</span>
+            <strong id="monitor-orders">0</strong>
+          </article>
+          <article class="monitor-card">
+            <span>Pedidos prontos</span>
+            <strong id="monitor-ready">0</strong>
+          </article>
+          <article class="monitor-card">
+            <span>Despachados</span>
+            <strong id="monitor-dispatched">0</strong>
+          </article>
+          <article class="monitor-card" id="monitor-actions-card">
+            <span>Ações pendentes</span>
+            <strong id="monitor-pending-actions">0</strong>
+          </article>
+          <article class="monitor-card" id="monitor-writes-card">
+            <span>Gravações pendentes</span>
+            <strong id="monitor-pending-writes">0</strong>
+          </article>
+        </div>
+
+        <div class="monitor-details">
+          <article>
+            <span>Última atualização</span>
+            <strong id="monitor-updated">--</strong>
+          </article>
+          <article>
+            <span>Último erro</span>
+            <strong id="monitor-error">Nenhum erro</strong>
+          </article>
+          <article>
+            <span>Último evento</span>
+            <strong id="monitor-last-event">--</strong>
+          </article>
+        </div>
       </section>
 
       <section class="events-panel" id="events-panel" aria-label="Eventos recebidos" hidden>

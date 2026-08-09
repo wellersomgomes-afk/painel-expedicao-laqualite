@@ -137,7 +137,8 @@ h1 {
 }
 
 .settings-panel,
-.events-panel {
+.events-panel,
+.monitor-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
   gap: 22px;
@@ -151,12 +152,127 @@ h1 {
 }
 
 .settings-panel[hidden],
-.events-panel[hidden] {
+.events-panel[hidden],
+.monitor-panel[hidden] {
   display: none;
 }
 
 .events-panel {
   grid-template-columns: 1fr;
+}
+
+.monitor-panel {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.monitor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.monitor-head div:first-child {
+  display: grid;
+  gap: 8px;
+}
+
+.monitor-head span,
+.monitor-details span {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.monitor-head strong {
+  font-size: 34px;
+}
+
+.monitor-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.monitor-actions button {
+  min-height: 54px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 18px;
+  background: var(--text);
+  color: #05070a;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.monitor-actions button:disabled {
+  opacity: 0.5;
+}
+
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.monitor-card,
+.monitor-details article {
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.monitor-card span {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.monitor-card strong {
+  align-self: end;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.monitor-card.ok {
+  border-color: #35d282;
+}
+
+.monitor-card.warning {
+  border-color: #ffd166;
+}
+
+.monitor-card.danger {
+  border-color: var(--late);
+}
+
+.monitor-card.ok strong {
+  color: #35d282;
+}
+
+.monitor-card.warning strong {
+  color: #ffd166;
+}
+
+.monitor-card.danger strong {
+  color: var(--late);
+}
+
+.monitor-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  gap: 12px;
+}
+
+.monitor-details strong {
+  font-size: 20px;
+  overflow-wrap: anywhere;
 }
 
 .events-head {
@@ -1662,6 +1778,14 @@ h1 {
 }
 
 @media (max-width: 1180px) {
+  .monitor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .monitor-details {
+    grid-template-columns: 1fr;
+  }
+
   .screen.kds-screen {
     padding: 10px;
   }
@@ -1854,11 +1978,24 @@ h1 {
   .summary,
   .settings-panel,
   .events-panel,
+  .monitor-panel,
+  .monitor-grid,
+  .monitor-details,
   .kds-grid,
   .kds-section-grid,
   .kds-size-compact .kds-section-grid,
   .kds-size-large .kds-section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .monitor-head,
+  .monitor-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .monitor-actions button {
+    width: 100%;
   }
 
   .kds-size-control {
