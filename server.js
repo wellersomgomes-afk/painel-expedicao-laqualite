@@ -28,10 +28,12 @@ let cachedTokenExpiresAt = 0;
 const orderLocks = new Map();
 const storageCache = new Map();
 const storageWriteQueues = new Map();
+const eventClients = new Set();
 let storageMode = "json";
 let storageDb = null;
 let storageReady = false;
 let storageError = "";
+let dataVersion = 0;
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -210,6 +212,40 @@ function queueStorageWrite(key, data) {
   storageWriteQueues.set(key, next);
 }
 
+function notifyDataChanged(type = "data") {
+  dataVersion += 1;
+  const payload = JSON.stringify({
+    type,
+    version: dataVersion,
+    updatedAt: formatLocalDateTime(),
+  });
+
+  for (const client of eventClients) {
+    client.write(`event: update\ndata: ${payload}\n\n`);
+  }
+}
+
+function openEventStream(request, response) {
+  response.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+  });
+
+  response.write(`event: ready\ndata: ${JSON.stringify({ version: dataVersion })}\n\n`);
+  eventClients.add(response);
+
+  request.on("close", () => {
+    eventClients.delete(response);
+  });
+}
+
+function pingEventClients() {
+  for (const client of eventClients) {
+    client.write(`event: ping\ndata: ${JSON.stringify({ version: dataVersion })}\n\n`);
+  }
+}
+
 function orderLockKey(target) {
   return String(target?.orderId || target?.number || "");
 }
@@ -266,6 +302,7 @@ function readOrders() {
 
 function writeOrders(orders) {
   writeJsonFile(ORDERS_FILE, orders);
+  notifyDataChanged("orders");
 }
 
 function readEvents() {
@@ -275,6 +312,7 @@ function readEvents() {
 
 function writeEvents(events) {
   writeJsonFile(EVENTS_FILE, events.slice(0, 30));
+  notifyDataChanged("events");
 }
 
 function readDispatchedOrders() {
@@ -289,6 +327,7 @@ function readDrivers() {
 
 function writeDrivers(drivers) {
   writeJsonFile(DRIVERS_FILE, drivers);
+  notifyDataChanged("drivers");
 }
 
 function normalizeDriverName(value) {
@@ -434,6 +473,7 @@ function sectorsFromCategoryIds(categoryIds) {
 
 function writeDispatchedOrders(orders) {
   writeJsonFile(DISPATCHED_FILE, orders.slice(0, 50));
+  notifyDataChanged("dispatched-orders");
 }
 
 function readKdsReadyOrders() {
@@ -443,6 +483,7 @@ function readKdsReadyOrders() {
 
 function writeKdsReadyOrders(orders) {
   writeJsonFile(KDS_READY_FILE, orders.slice(0, 300));
+  notifyDataChanged("kds-ready-orders");
 }
 
 function isSameOrder(left, right) {
@@ -828,6 +869,7 @@ function healthSnapshot() {
     uptimeSeconds: Math.floor(process.uptime()),
     pendingOrderActions: orderLocks.size,
     pendingStorageWrites: storageWriteQueues.size,
+    connectedScreens: eventClients.size,
     orders: readOrders().length,
     readyOrders: readKdsReadyOrders().length,
     dispatchedOrders: readDispatchedOrders().length,
@@ -2535,7 +2577,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -2556,6 +2598,11 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/health") {
     sendJson(response, 200, healthSnapshot());
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/updates") {
+    openEventStream(request, response);
     return;
   }
 
@@ -2703,5 +2750,6 @@ initializeStorage().then(() => {
     console.log(`Armazenamento: ${storageMode}`);
     setTimeout(syncOpenOrdersSafely, 5000);
     setInterval(syncOpenOrdersSafely, SYNC_OPEN_ORDERS_INTERVAL_MS);
+    setInterval(pingEventClients, 25000);
   });
 });

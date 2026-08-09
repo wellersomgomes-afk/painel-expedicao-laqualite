@@ -35,6 +35,7 @@ let isMenuHidden = localStorage.getItem("kdsMenuHidden") === "true";
 let isSettingsOpen = false;
 let searchOrderNumber = localStorage.getItem("kdsSearchOrderNumber") || "";
 let shouldSyncOnNextKdsLoad = true;
+let liveRefreshTimer = null;
 const selectedDispatchOrders = new Set();
 
 if (activeView === "dispatch") {
@@ -913,6 +914,23 @@ async function loadDrivers() {
   }
 }
 
+function scheduleLiveRefresh() {
+  clearTimeout(liveRefreshTimer);
+  liveRefreshTimer = setTimeout(() => {
+    loadKdsOrders();
+    loadDrivers();
+  }, 150);
+}
+
+function connectLiveUpdates() {
+  if (!window.EventSource) {
+    return;
+  }
+
+  const source = new EventSource("/api/updates");
+  source.addEventListener("update", scheduleLiveRefresh);
+}
+
 async function addDriver(name) {
   const response = await fetch("/api/drivers", {
     method: "POST",
@@ -1275,5 +1293,6 @@ setSettingsOpen(false);
 updateFullscreenButton();
 loadKdsOrders();
 loadDrivers();
+connectLiveUpdates();
 setInterval(loadKdsOrders, 5000);
 setInterval(renderKds, 1000);

@@ -10,6 +10,7 @@ let events = [];
 
 let activeFilter = "all";
 let shouldSyncOnNextOrdersLoad = true;
+let liveRefreshTimer = null;
 
 const orderList = document.querySelector("#order-list");
 const ordersPanel = document.querySelector("#orders-panel");
@@ -390,6 +391,24 @@ async function loadDispatchedOrders() {
   renderOrders();
 }
 
+function scheduleLiveRefresh() {
+  clearTimeout(liveRefreshTimer);
+  liveRefreshTimer = setTimeout(() => {
+    loadOrders();
+    loadDispatchedOrders();
+    loadEvents();
+  }, 150);
+}
+
+function connectLiveUpdates() {
+  if (!window.EventSource) {
+    return;
+  }
+
+  const source = new EventSource("/api/updates");
+  source.addEventListener("update", scheduleLiveRefresh);
+}
+
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     if (tab.id === "fullscreen-button") {
@@ -424,6 +443,7 @@ loadOrders();
 updateFullscreenButton();
 loadDispatchedOrders();
 loadEvents();
+connectLiveUpdates();
 setInterval(loadOrders, 5000);
 setInterval(loadDispatchedOrders, 5000);
 setInterval(loadEvents, 5000);
