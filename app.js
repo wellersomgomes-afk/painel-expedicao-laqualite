@@ -352,6 +352,10 @@ function formatDispatchedTime(order) {
   });
 }
 
+function dispatchedStatusLabel(order) {
+  return `${isPickup(order) ? "Pronto retirada" : "Despachado"} ${formatDispatchedTime(order)}`;
+}
+
 function renderDispatchedOrders() {
   if (dispatchedOrders.length === 0) {
     dispatchedList.innerHTML = '<div class="empty">Nenhum pedido despachado ainda.</div>';
@@ -379,7 +383,7 @@ function renderDispatchedOrders() {
           <span class="mobile-label">Motoboy</span>
           <strong>${order.driverName || ""}</strong>
         </div>
-        <div class="status ok">Despachado ${formatDispatchedTime(order)}</div>
+        <div class="status ok">${dispatchedStatusLabel(order)}</div>
       </article>
     `)
     .join("");
