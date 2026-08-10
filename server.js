@@ -20,6 +20,10 @@ const CARDAPIO_READY_ENDPOINT_TEMPLATE = process.env.CARDAPIO_READY_ENDPOINT_TEM
 const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
+const CARDAPIO_EVENTS_URL =
+  process.env.CARDAPIO_EVENTS_URL ||
+  "https://integracao.cardapioweb.com/api/open_delivery/v1/events:polling";
+const CARDAPIO_EVENTS_ACK_URL = process.env.CARDAPIO_EVENTS_ACK_URL || "";
 const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 60000;
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const HIDE_TEST_ORDERS =
@@ -1912,17 +1916,103 @@ function normalizeSyncedOrders(payload, previousOrders) {
     });
 }
 
+function extractEventsList(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  return (
+    payload.events ||
+    payload.items ||
+    payload.data?.events ||
+    payload.data?.items ||
+    payload.data ||
+    payload.content ||
+    []
+  );
+}
+
+function cardapioEventsAckUrl() {
+  if (CARDAPIO_EVENTS_ACK_URL) {
+    return CARDAPIO_EVENTS_ACK_URL;
+  }
+
+  if (CARDAPIO_EVENTS_URL.includes("events:polling")) {
+    return CARDAPIO_EVENTS_URL.replace("events:polling", "events/acknowledgment");
+  }
+
+  return `${CARDAPIO_EVENTS_URL.replace(/\/$/, "")}/acknowledgment`;
+}
+
+function acknowledgmentPayloadForEvent(event) {
+  const eventId = event.eventId || event.id;
+
+  if (!eventId || !event.orderId || !event.eventType) {
+    return null;
+  }
+
+  return {
+    id: String(eventId),
+    orderId: String(event.orderId),
+    eventType: String(event.eventType).toUpperCase(),
+  };
+}
+
+async function acknowledgeCardapioEvents(events) {
+  const acknowledgments = events
+    .map(acknowledgmentPayloadForEvent)
+    .filter(Boolean);
+
+  if (!acknowledgments.length) {
+    return { ok: true, action: "ack-skipped", count: 0 };
+  }
+
+  const ackUrl = cardapioEventsAckUrl();
+  const token = await getCardapioToken(ackUrl);
+  const response = await fetch(ackUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(acknowledgments),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Falha ao confirmar eventos do Cardapio Web: HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ""}`
+    );
+  }
+
+  return { ok: true, action: "acknowledged", count: acknowledgments.length };
+}
+
 async function syncOpenOrders() {
-  const token = await getCardapioToken(CARDAPIO_ORDERS_URL);
-  const response = await fetch(CARDAPIO_ORDERS_URL, {
+  const token = await getCardapioToken(CARDAPIO_EVENTS_URL);
+  const response = await fetch(CARDAPIO_EVENTS_URL, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
   });
 
+  if (response.status === 204) {
+    return {
+      ok: true,
+      action: "events-polled",
+      count: 0,
+      acknowledged: 0,
+    };
+  }
+
   if (!response.ok) {
-    throw new Error(`Falha ao sincronizar pedidos abertos: HTTP ${response.status}`);
+    throw new Error(`Falha ao consultar eventos do Cardapio Web: HTTP ${response.status}`);
   }
 
   const responseText = await response.text();
@@ -1932,18 +2022,48 @@ async function syncOpenOrders() {
     payload = JSON.parse(responseText);
   } catch (error) {
     throw new Error(
-      `Falha ao sincronizar pedidos abertos: o Cardapio Web retornou uma pagina em vez de JSON. Verifique CARDAPIO_ORDERS_URL no Render. Inicio da resposta: ${responseText.slice(0, 120)}`
+      `Falha ao consultar eventos do Cardapio Web: retornou uma pagina em vez de JSON. Verifique CARDAPIO_EVENTS_URL no Render. Inicio da resposta: ${responseText.slice(0, 120)}`
     );
   }
 
-  const syncedOrders = normalizeSyncedOrders(payload, readOrders());
+  const events = extractEventsList(payload);
+  const processedEvents = [];
+  const failedEvents = [];
 
-  writeOrders(syncedOrders);
+  for (const event of events) {
+    try {
+      const result = await handleWebhook(event);
+
+      if (result.ok) {
+        processedEvents.push(event);
+      } else {
+        failedEvents.push({ event, message: result.message || "Evento nao processado." });
+      }
+    } catch (error) {
+      failedEvents.push({ event, message: error.message });
+    }
+  }
+
+  const ackResult = await acknowledgeCardapioEvents(processedEvents);
+
+  if (failedEvents.length) {
+    recordSystemEvent(
+      { source: CARDAPIO_EVENTS_URL, failed: failedEvents.length },
+      {
+        ok: false,
+        action: "events-partial-failed",
+        message: `${failedEvents.length} evento(s) nao foram confirmados para tentar novamente depois.`,
+      }
+    );
+  }
 
   return {
     ok: true,
-    action: "synced",
-    count: syncedOrders.length,
+    action: "events-polled",
+    count: events.length,
+    processed: processedEvents.length,
+    acknowledged: ackResult.count,
+    failed: failedEvents.length,
   };
 }
 
@@ -1954,10 +2074,12 @@ async function syncOpenOrdersSafely() {
 
   try {
     const result = await syncOpenOrders();
-    recordSystemEvent({ source: CARDAPIO_ORDERS_URL }, result);
+    if (result.count || result.failed) {
+      recordSystemEvent({ source: CARDAPIO_EVENTS_URL }, result);
+    }
   } catch (error) {
     recordSystemEvent(
-      { source: CARDAPIO_ORDERS_URL },
+      { source: CARDAPIO_EVENTS_URL },
       { ok: false, action: "sync-failed", message: error.message }
     );
   }
@@ -2782,11 +2904,11 @@ const server = http.createServer(async (request, response) => {
   if (["GET", "POST"].includes(request.method) && url.pathname === "/api/sync-open-orders") {
     try {
       const result = await syncOpenOrders();
-      recordSystemEvent({ source: CARDAPIO_ORDERS_URL, manual: true }, result);
+      recordSystemEvent({ source: CARDAPIO_EVENTS_URL, manual: true }, result);
       sendJson(response, 200, result);
     } catch (error) {
       const result = { ok: false, action: "sync-failed", message: error.message };
-      recordSystemEvent({ source: CARDAPIO_ORDERS_URL, manual: true }, result);
+      recordSystemEvent({ source: CARDAPIO_EVENTS_URL, manual: true }, result);
       sendJson(response, 500, result);
     }
     return;
