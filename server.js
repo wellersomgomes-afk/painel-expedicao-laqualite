@@ -22,6 +22,8 @@ const CARDAPIO_ORDERS_URL =
   "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
 const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 60000;
 const APP_TIME_ZONE = "America/Sao_Paulo";
+const HIDE_TEST_ORDERS =
+  Boolean(process.env.RENDER) || process.env.HIDE_TEST_ORDERS === "true";
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
@@ -74,6 +76,17 @@ function isActiveWorkdayOrder(order) {
     isTodayTimestamp(order?.lastSeenOpenAt) ||
     isTodayTimestamp(order?.dispatchedAt)
   );
+}
+
+function isTestOrderRecord(order) {
+  return (
+    String(order?.orderId || "").startsWith("teste-") ||
+    String(order?.orderURL || "").includes("/api/test-orders/")
+  );
+}
+
+function shouldShowWorkdayOrder(order) {
+  return isActiveWorkdayOrder(order) && (!HIDE_TEST_ORDERS || !isTestOrderRecord(order));
 }
 
 function ensureDataFile() {
@@ -310,7 +323,7 @@ function readOrders() {
       !demoOrderNumbers.has(String(order.number)) &&
       order.orderId &&
       order.orderId !== order.number &&
-      isActiveWorkdayOrder(order)
+      shouldShowWorkdayOrder(order)
     )
     .map((order) => ({
       ...order,
@@ -349,7 +362,7 @@ function writeEvents(events) {
 
 function readDispatchedOrders() {
   ensureDataFile();
-  return readJsonFile(DISPATCHED_FILE).filter(isActiveWorkdayOrder);
+  return readJsonFile(DISPATCHED_FILE).filter(shouldShowWorkdayOrder);
 }
 
 function readDrivers() {
@@ -510,7 +523,7 @@ function writeDispatchedOrders(orders) {
 
 function readKdsReadyOrders() {
   ensureDataFile();
-  return readJsonFile(KDS_READY_FILE).filter(isActiveWorkdayOrder);
+  return readJsonFile(KDS_READY_FILE).filter(shouldShowWorkdayOrder);
 }
 
 function writeKdsReadyOrders(orders) {
