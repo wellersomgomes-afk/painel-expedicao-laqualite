@@ -713,6 +713,15 @@ function recordDispatchedOrder(order, payload) {
   writeDispatchedOrders(withoutDuplicate);
 }
 
+function removeDispatchedOrder(order) {
+  const dispatchedOrders = readDispatchedOrders();
+  const remainingOrders = dispatchedOrders.filter((item) => !isSameOrder(item, order));
+
+  if (remainingOrders.length !== dispatchedOrders.length) {
+    writeDispatchedOrders(remainingOrders);
+  }
+}
+
 function removeKdsReadyOrder(order) {
   const readyOrders = readKdsReadyOrders().filter((item) => !isSameOrder(item, order));
   writeKdsReadyOrders(readyOrders);
@@ -2709,6 +2718,11 @@ async function handleWebhook(payload) {
       if (removalKind === "dispatched") {
         recordDispatchedOrder(removedOrder, payload);
       }
+    }
+
+    if (removalKind === "closed") {
+      removeDispatchedOrder(normalizedOrder);
+      removeKdsReadyOrder(normalizedOrder);
     }
 
     return {
