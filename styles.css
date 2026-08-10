@@ -81,6 +81,7 @@ h1 {
   cursor: pointer;
   font-size: 20px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .tab.active {
@@ -1987,6 +1988,32 @@ h1 {
   .dispatch-card {
     width: 230px;
     min-height: 230px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .tab {
+    min-height: 50px;
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 17px;
+  }
+
+  .config-menu {
+    width: 100%;
   }
 }
 
