@@ -45,6 +45,37 @@ const contentTypes = {
 const initialOrders = [];
 const demoOrderNumbers = new Set(["1048", "1049", "1050", "1051", "1052", "1053"]);
 
+function localDateKey(value = Date.now()) {
+  const timestamp = Number(value);
+
+  if (!Number.isFinite(timestamp)) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function isTodayTimestamp(value) {
+  const todayKey = localDateKey();
+  const valueKey = localDateKey(value);
+
+  return Boolean(todayKey && valueKey && todayKey === valueKey);
+}
+
+function isActiveWorkdayOrder(order) {
+  return (
+    isTodayTimestamp(order?.arrivedAt) ||
+    isTodayTimestamp(order?.readyAt) ||
+    isTodayTimestamp(order?.lastSeenOpenAt) ||
+    isTodayTimestamp(order?.dispatchedAt)
+  );
+}
+
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR);
@@ -278,7 +309,8 @@ function readOrders() {
     .filter((order) =>
       !demoOrderNumbers.has(String(order.number)) &&
       order.orderId &&
-      order.orderId !== order.number
+      order.orderId !== order.number &&
+      isActiveWorkdayOrder(order)
     )
     .map((order) => ({
       ...order,
@@ -317,7 +349,7 @@ function writeEvents(events) {
 
 function readDispatchedOrders() {
   ensureDataFile();
-  return readJsonFile(DISPATCHED_FILE);
+  return readJsonFile(DISPATCHED_FILE).filter(isActiveWorkdayOrder);
 }
 
 function readDrivers() {
@@ -478,7 +510,7 @@ function writeDispatchedOrders(orders) {
 
 function readKdsReadyOrders() {
   ensureDataFile();
-  return readJsonFile(KDS_READY_FILE);
+  return readJsonFile(KDS_READY_FILE).filter(isActiveWorkdayOrder);
 }
 
 function writeKdsReadyOrders(orders) {
@@ -1849,6 +1881,7 @@ function isOpenOrder(order) {
 
 function normalizeSyncedOrders(payload, previousOrders) {
   const previousByOrderId = new Map(previousOrders.map((order) => [String(order.orderId), order]));
+  const syncedAt = Date.now();
 
   return extractOrdersList(payload)
     .map(normalizeOrder)
@@ -1860,6 +1893,7 @@ function normalizeSyncedOrders(payload, previousOrders) {
       return {
         ...order,
         arrivedAt: previous?.arrivedAt || order.arrivedAt,
+        lastSeenOpenAt: syncedAt,
         items: order.items?.length ? order.items : previous?.items || [],
       };
     });
@@ -2550,10 +2584,12 @@ async function handleWebhook(payload) {
     };
   }
 
+  const activeOrder = { ...normalizedOrder, lastSeenOpenAt: Date.now() };
+
   if (currentIndex >= 0) {
-    orders[currentIndex] = { ...orders[currentIndex], ...normalizedOrder };
+    orders[currentIndex] = { ...orders[currentIndex], ...activeOrder };
   } else {
-    orders.push(normalizedOrder);
+    orders.push(activeOrder);
   }
 
   writeOrders(orders);
