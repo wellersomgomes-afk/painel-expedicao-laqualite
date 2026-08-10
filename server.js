@@ -2419,12 +2419,14 @@ function ordersWithKdsStatus() {
     .sort((a, b) => b.arrivedAt - a.arrivedAt);
 }
 
-function isDispatchEvent(payload, normalizedOrder) {
+function removalEventKind(payload, normalizedOrder) {
   const eventType = String(payload.eventType || "").toUpperCase();
   const activeEventTypes = new Set(["CREATED", "CONFIRMED", "ACCEPTED", "PREPARING", "READY"]);
-  const removeEventTypes = new Set([
+  const dispatchedEventTypes = new Set([
     "DISPATCHED",
     "OUT_FOR_DELIVERY",
+  ]);
+  const closedEventTypes = new Set([
     "DELIVERED",
     "CONCLUDED",
     "FINISHED",
@@ -2434,11 +2436,15 @@ function isDispatchEvent(payload, normalizedOrder) {
   ]);
 
   if (activeEventTypes.has(eventType)) {
-    return false;
+    return "";
   }
 
-  if (removeEventTypes.has(eventType)) {
-    return true;
+  if (dispatchedEventTypes.has(eventType)) {
+    return "dispatched";
+  }
+
+  if (closedEventTypes.has(eventType)) {
+    return "closed";
   }
 
   const eventText = [
@@ -2453,13 +2459,18 @@ function isDispatchEvent(payload, normalizedOrder) {
     .join(" ")
     .toLowerCase();
 
-  return [
+  if ([
     "dispatch",
     "dispatched",
     "despach",
     "saiu",
     "out_for_delivery",
     "out for delivery",
+  ].some((word) => eventText.includes(word))) {
+    return "dispatched";
+  }
+
+  if ([
     "ready_for_pickup",
     "ready for pickup",
     "pickedup",
@@ -2468,19 +2479,26 @@ function isDispatchEvent(payload, normalizedOrder) {
     "sent",
     "shipped",
     "delivered",
-    "delivery",
     "concluded",
     "finished",
     "completed",
     "cancel",
-  ].some((word) => eventText.includes(word));
+  ].some((word) => eventText.includes(word))) {
+    return "closed";
+  }
+
+  return "";
+}
+
+function isDispatchEvent(payload, normalizedOrder) {
+  return Boolean(removalEventKind(payload, normalizedOrder));
 }
 
 async function handleWebhook(payload) {
   let payloadForOrder = payload;
-  const shouldRemoveFromWebhook = isDispatchEvent(payload, null);
+  const webhookRemovalKind = removalEventKind(payload, null);
 
-  if (payload.orderURL && !shouldRemoveFromWebhook) {
+  if (payload.orderURL && !webhookRemovalKind) {
     payloadForOrder = await fetchCardapioOrder(payload.orderURL, payload);
   }
 
@@ -2511,16 +2529,22 @@ async function handleWebhook(payload) {
     order.number === String(payload.orderId || "")
   );
 
-  if (shouldRemoveFromWebhook || isDispatchEvent({ ...payload, ...payloadForOrder }, normalizedOrder)) {
+  const removalKind = webhookRemovalKind || removalEventKind({ ...payload, ...payloadForOrder }, normalizedOrder);
+
+  if (removalKind) {
     if (currentIndex >= 0) {
       const removedOrder = orders.splice(currentIndex, 1)[0];
       writeOrders(orders);
-      recordDispatchedOrder(removedOrder, payload);
+      removeKdsReadyOrder(removedOrder);
+
+      if (removalKind === "dispatched") {
+        recordDispatchedOrder(removedOrder, payload);
+      }
     }
 
     return {
       ok: true,
-      action: "removed",
+      action: removalKind === "dispatched" ? "removed" : "closed",
       order: normalizedOrder.number,
       eventType: payload.eventType || "",
     };
