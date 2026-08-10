@@ -527,6 +527,17 @@ function writeDispatchedOrders(orders) {
   notifyDataChanged("dispatched-orders");
 }
 
+function clearDispatchedOrders() {
+  const count = readJsonFile(DISPATCHED_FILE).length;
+  writeDispatchedOrders([]);
+
+  return {
+    ok: true,
+    action: "dispatched-cleared",
+    count,
+  };
+}
+
 function readKdsReadyOrders() {
   ensureDataFile();
   return readJsonFile(KDS_READY_FILE).filter(shouldShowWorkdayOrder);
@@ -2793,7 +2804,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -2829,6 +2840,13 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/dispatched-orders") {
     sendJson(response, 200, { orders: readDispatchedOrders() });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/clear-dispatched-orders") {
+    const result = clearDispatchedOrders();
+    recordSystemEvent({ source: "monitor", manual: true }, result);
+    sendJson(response, 200, result);
     return;
   }
 

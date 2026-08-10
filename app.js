@@ -39,6 +39,7 @@ const monitorError = document.querySelector("#monitor-error");
 const monitorLastEvent = document.querySelector("#monitor-last-event");
 const monitorRefresh = document.querySelector("#monitor-refresh");
 const monitorSync = document.querySelector("#monitor-sync");
+const monitorClearDispatched = document.querySelector("#monitor-clear-dispatched");
 const monitorSystemCard = document.querySelector("#monitor-system-card");
 const monitorStorageCard = document.querySelector("#monitor-storage-card");
 const monitorActionsCard = document.querySelector("#monitor-actions-card");
@@ -522,6 +523,40 @@ async function syncNow() {
   }, 4000);
 }
 
+async function clearDispatchedNow() {
+  if (!monitorClearDispatched) {
+    return;
+  }
+
+  const confirmed = window.confirm("Limpar a lista de despachados? Pedidos ativos e KDS nao serao apagados.");
+
+  if (!confirmed) {
+    return;
+  }
+
+  monitorClearDispatched.disabled = true;
+  monitorMessage = "Limpando despachados...";
+  renderMonitor();
+
+  try {
+    const response = await fetch("/api/clear-dispatched-orders", { method: "POST" });
+    const result = await response.json();
+    monitorMessage = result.ok
+      ? `${result.count || 0} despachado(s) removido(s)`
+      : result.message || "Falha ao limpar despachados";
+  } catch (error) {
+    monitorMessage = "Falha ao chamar limpeza";
+  }
+
+  await Promise.all([loadDispatchedOrders(), loadEvents(), loadHealth()]);
+  monitorClearDispatched.disabled = false;
+
+  setTimeout(() => {
+    monitorMessage = "";
+    renderMonitor();
+  }, 4000);
+}
+
 function scheduleLiveRefresh() {
   clearTimeout(liveRefreshTimer);
   liveRefreshTimer = setTimeout(() => {
@@ -590,6 +625,10 @@ if (monitorRefresh) {
 
 if (monitorSync) {
   monitorSync.addEventListener("click", syncNow);
+}
+
+if (monitorClearDispatched) {
+  monitorClearDispatched.addEventListener("click", clearDispatchedNow);
 }
 
 limitInput.addEventListener("input", () => {
