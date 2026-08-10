@@ -126,6 +126,23 @@ function normalizeAddress(value) {
   return normalizeCustomerName(value);
 }
 
+function isMeaningfulCustomerName(value) {
+  const name = normalizeCustomerName(value);
+  const genericNames = new Set(["cliente", "nao informado", "consumidor", "sem nome"]);
+
+  return name.length >= 5 && !genericNames.has(name);
+}
+
+function isMeaningfulPhone(value) {
+  return normalizePhone(value).length >= 8;
+}
+
+function isMeaningfulAddress(value) {
+  const address = normalizeAddress(value);
+
+  return address.length >= 8 && !address.includes("nao informado");
+}
+
 function duplicateKeyCounts(sourceOrders, keyFactory) {
   return sourceOrders.reduce((counts, order) => {
     const key = keyFactory(order);
@@ -148,9 +165,9 @@ function duplicateNearbyOrders(sourceOrders) {
       id: orderDuplicateId(order),
       arrivedAt: Number(order.arrivedAt),
       identities: [
-        normalizePhone(order.phone),
-        normalizeAddress(order.address),
-        normalizeCustomerName(order.customer),
+        isMeaningfulPhone(order.phone) ? normalizePhone(order.phone) : "",
+        isMeaningfulAddress(order.address) ? normalizeAddress(order.address) : "",
+        isMeaningfulCustomerName(order.customer) ? normalizeCustomerName(order.customer) : "",
       ].filter(Boolean),
     }))
     .filter((order) => order.id && Number.isFinite(order.arrivedAt) && order.identities.length > 0);
@@ -173,23 +190,27 @@ function duplicateNearbyOrders(sourceOrders) {
 
 function duplicateSignals(sourceOrders) {
   return {
-    names: duplicateKeyCounts(sourceOrders, (order) => normalizeCustomerName(order.customer)),
-    phones: duplicateKeyCounts(sourceOrders, (order) => normalizePhone(order.phone)),
-    addresses: duplicateKeyCounts(sourceOrders, (order) => normalizeAddress(order.address)),
+    names: duplicateKeyCounts(sourceOrders, (order) =>
+      isMeaningfulCustomerName(order.customer) ? normalizeCustomerName(order.customer) : ""
+    ),
+    phones: duplicateKeyCounts(sourceOrders, (order) =>
+      isMeaningfulPhone(order.phone) ? normalizePhone(order.phone) : ""
+    ),
+    addresses: duplicateKeyCounts(sourceOrders, (order) =>
+      isMeaningfulAddress(order.address) ? normalizeAddress(order.address) : ""
+    ),
     nearby: duplicateNearbyOrders(sourceOrders),
   };
 }
 
 function isPossibleDuplicate(order, signals) {
-  const customer = normalizeCustomerName(order.customer);
   const phone = normalizePhone(order.phone);
   const address = normalizeAddress(order.address);
   const id = orderDuplicateId(order);
 
   return (
-    (customer && (signals.names.get(customer) || 0) > 1) ||
-    (phone && (signals.phones.get(phone) || 0) > 1) ||
-    (address && (signals.addresses.get(address) || 0) > 1) ||
+    (isMeaningfulPhone(order.phone) && (signals.phones.get(phone) || 0) > 1) ||
+    (isMeaningfulAddress(order.address) && (signals.addresses.get(address) || 0) > 1) ||
     (id && signals.nearby.has(id))
   );
 }
