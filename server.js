@@ -366,7 +366,9 @@ function writeEvents(events) {
 
 function readDispatchedOrders() {
   ensureDataFile();
-  return readJsonFile(DISPATCHED_FILE).filter(shouldShowWorkdayOrder);
+  return readJsonFile(DISPATCHED_FILE).filter((order) =>
+    shouldShowWorkdayOrder(order) && order.fulfillmentType !== "pickup"
+  );
 }
 
 function readDrivers() {
@@ -827,7 +829,12 @@ async function dispatchKdsReadyOrder(target) {
   orders.splice(orderIndex, 1);
   writeOrders(orders);
   removeKdsReadyOrder(order);
-  recordDispatchedOrder(order, { action, eventType, driver });
+
+  if (action === "dispatch") {
+    recordDispatchedOrder(order, { action, eventType, driver });
+  } else {
+    removeDispatchedOrder(order);
+  }
 
   return {
     ok: true,
