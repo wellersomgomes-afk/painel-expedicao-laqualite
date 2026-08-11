@@ -29,7 +29,9 @@ const monitorMainStatus = document.querySelector("#monitor-main-status");
 const monitorSystem = document.querySelector("#monitor-system");
 const monitorStorage = document.querySelector("#monitor-storage");
 const monitorScreens = document.querySelector("#monitor-screens");
+const monitorMemoryCard = document.querySelector("#monitor-memory-card");
 const monitorMemory = document.querySelector("#monitor-memory");
+const monitorMemoryHint = document.querySelector("#monitor-memory-hint");
 const monitorOrders = document.querySelector("#monitor-orders");
 const monitorReady = document.querySelector("#monitor-ready");
 const monitorDispatched = document.querySelector("#monitor-dispatched");
@@ -420,18 +422,36 @@ function setMonitorCardState(card, state) {
   card.classList.toggle("danger", state === "danger");
 }
 
+function memoryState(memoryMb) {
+  if (!Number.isFinite(memoryMb)) {
+    return { state: "warning", label: "--", hint: "Aguardando leitura" };
+  }
+
+  if (memoryMb >= 450) {
+    return { state: "danger", label: `${memoryMb} MB`, hint: "Risco de reiniciar" };
+  }
+
+  if (memoryMb >= 350) {
+    return { state: "warning", label: `${memoryMb} MB`, hint: "Observar" };
+  }
+
+  return { state: "ok", label: `${memoryMb} MB`, hint: "Tranquilo" };
+}
+
 function renderMonitor() {
   const lastEvent = events[0];
   const isStorageOk = health?.storage === "postgres" && health?.storageReady && !health?.storageError;
   const pendingActions = Number(health?.pendingOrderActions || 0);
   const pendingWrites = Number(health?.pendingStorageWrites || 0);
+  const memory = memoryState(Number(health?.memory?.rssMb));
   const isSystemOk = Boolean(health?.ok) && isStorageOk && pendingActions === 0 && pendingWrites === 0;
 
   monitorMainStatus.textContent = monitorMessage || (isSystemOk ? "Sistema saudável" : "Atenção necessária");
   monitorSystem.textContent = health?.ok ? "Online" : "Sem resposta";
   monitorStorage.textContent = isStorageOk ? "PostgreSQL conectado" : "Verificar banco";
   monitorScreens.textContent = String(health?.connectedScreens ?? 0);
-  monitorMemory.textContent = health?.memory ? `${health.memory.rssMb} MB` : "--";
+  monitorMemory.textContent = memory.label;
+  monitorMemoryHint.textContent = memory.hint;
   monitorOrders.textContent = String(health?.orders ?? orders.length);
   monitorReady.textContent = String(health?.readyOrders ?? 0);
   monitorDispatched.textContent = String(health?.dispatchedOrders ?? dispatchedOrders.length);
@@ -445,6 +465,7 @@ function renderMonitor() {
 
   setMonitorCardState(monitorSystemCard, health?.ok ? "ok" : "danger");
   setMonitorCardState(monitorStorageCard, isStorageOk ? "ok" : "danger");
+  setMonitorCardState(monitorMemoryCard, memory.state);
   setMonitorCardState(monitorActionsCard, pendingActions === 0 ? "ok" : "warning");
   setMonitorCardState(monitorWritesCard, pendingWrites === 0 ? "ok" : "warning");
 }

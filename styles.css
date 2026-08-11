@@ -276,6 +276,12 @@ h1 {
   line-height: 1.05;
 }
 
+.monitor-card small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .monitor-card.ok {
   border-color: #35d282;
 }
