@@ -2208,7 +2208,7 @@ function partnerOrderId(order) {
 function partnerOrderStatusKind(order) {
   const status = String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || "").toLowerCase();
 
-  if (["released", "waiting_to_catch"].includes(status)) {
+  if (status === "released") {
     return "dispatched";
   }
 
@@ -3251,8 +3251,6 @@ function removalEventKind(payload, normalizedOrder) {
   }
 
   if ([
-    "ready_for_pickup",
-    "ready for pickup",
     "pickedup",
     "picked_up",
     "picked up",
@@ -3278,7 +3276,6 @@ function isProductionReadyEvent(payload, normalizedOrder) {
   }
 
   if ([
-    "READY_FOR_PICKUP",
     "DISPATCHED",
     "OUT_FOR_DELIVERY",
     "DELIVERED",
@@ -3313,11 +3310,6 @@ function isProductionReadyEvent(payload, normalizedOrder) {
     .toLowerCase();
 
   if ([
-    "ready_for_pickup",
-    "ready for pickup",
-    "pronto para retirada",
-    "retirada",
-    "pickup",
     "dispatch",
     "despach",
     "out_for_delivery",
@@ -3333,9 +3325,13 @@ function isProductionReadyEvent(payload, normalizedOrder) {
   return [
     "production_ready",
     "order_ready",
+    "ready_for_pickup",
+    "ready for pickup",
+    "waiting_to_catch",
     "prepared",
     "ready",
     "pronto",
+    "pronto para retirada",
     "pedido pronto",
     "producao pronta",
     "produção pronta",
