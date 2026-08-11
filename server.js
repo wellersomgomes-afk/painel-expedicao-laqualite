@@ -15,11 +15,16 @@ const CATEGORY_SECTORS_FILE = path.join(DATA_DIR, "category-sectors.json");
 const DRIVERS_FILE = path.join(DATA_DIR, "drivers.json");
 const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
+const CARDAPIO_API_KEY = process.env.CARDAPIO_API_KEY || "";
+const CARDAPIO_PARTNER_KEY = process.env.CARDAPIO_PARTNER_KEY || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
 const CARDAPIO_READY_ENDPOINT_TEMPLATE = process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "";
 const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
+const CARDAPIO_PARTNER_ORDERS_URL =
+  process.env.CARDAPIO_PARTNER_ORDERS_URL ||
+  "https://integracao.cardapioweb.com/api/partner/v1/orders";
 const CARDAPIO_EVENTS_URL =
   process.env.CARDAPIO_EVENTS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/events:polling";
@@ -36,6 +41,8 @@ const UPDATE_CLIENT_TTL_MS = Number(process.env.UPDATE_CLIENT_TTL_MS) || 10 * 60
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
+let partnerOrdersLastSuccessfulSyncAt = 0;
+let partnerOrdersSyncInFlight = null;
 const orderLocks = new Map();
 const storageCache = new Map();
 const storageWriteQueues = new Map();
@@ -2122,6 +2129,183 @@ async function fetchCardapioOrder(orderURL, payload = {}) {
   return response.json();
 }
 
+function cardapioPartnerApiKey() {
+  return CARDAPIO_API_KEY;
+}
+
+function cardapioPartnerHeaders() {
+  const headers = {
+    Accept: "application/json",
+    "X-API-KEY": cardapioPartnerApiKey(),
+  };
+
+  if (CARDAPIO_PARTNER_KEY) {
+    headers["X-PARTNER-KEY"] = CARDAPIO_PARTNER_KEY;
+  }
+
+  return headers;
+}
+
+async function fetchCardapioPartnerJson(url, options = {}) {
+  const apiKey = cardapioPartnerApiKey();
+
+  if (!apiKey) {
+    throw new Error("CARDAPIO_API_KEY nao configurado no Render.");
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...cardapioPartnerHeaders(),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    const hint = response.status === 401
+      ? " Verifique CARDAPIO_API_KEY no Render."
+      : "";
+    throw new Error(
+      `${url} retornou HTTP ${response.status}.${hint}${responseText ? ` ${responseText.slice(0, 200)}` : ""}`
+    );
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (error) {
+    throw new Error(
+      `Cardapio Web retornou uma pagina em vez de JSON no polling oficial. Inicio da resposta: ${responseText.slice(0, 120)}`
+    );
+  }
+}
+
+function partnerOrdersPollingUrl() {
+  const url = new URL(CARDAPIO_PARTNER_ORDERS_URL);
+
+  if (partnerOrdersLastSuccessfulSyncAt) {
+    const overlapMs = 2 * 60 * 1000;
+    url.searchParams.set("updated_since", new Date(partnerOrdersLastSuccessfulSyncAt - overlapMs).toISOString());
+  }
+
+  return url.toString();
+}
+
+function partnerOrderId(order) {
+  return String(getDeepValue(order, [
+    "id",
+    "order_id",
+    "orderId",
+    "orderID",
+  ]) || "");
+}
+
+function partnerOrderStatusKind(order) {
+  const status = String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || "").toLowerCase();
+
+  if (["released", "waiting_to_catch"].includes(status)) {
+    return "dispatched";
+  }
+
+  if ([
+    "canceled",
+    "cancelled",
+    "canceling",
+    "closed",
+    "delivered",
+    "finished",
+    "completed",
+    "concluded",
+  ].includes(status)) {
+    return "closed";
+  }
+
+  return "active";
+}
+
+async function syncPartnerModifiedOrders() {
+  if (partnerOrdersSyncInFlight) {
+    return partnerOrdersSyncInFlight;
+  }
+
+  partnerOrdersSyncInFlight = (async () => {
+    const payload = await fetchCardapioPartnerJson(partnerOrdersPollingUrl());
+    const changedOrders = extractOrdersList(payload).slice(0, 220);
+    const processedOrders = [];
+    const failedOrders = [];
+
+    for (const changedOrder of changedOrders) {
+      const orderId = partnerOrderId(changedOrder);
+
+      if (!orderId) {
+        continue;
+      }
+
+      try {
+        const statusKind = partnerOrderStatusKind(changedOrder);
+
+        if (statusKind === "closed") {
+          const normalized = normalizeOrder(changedOrder) || { orderId, number: orderId };
+          removeDispatchedOrder(normalized);
+          removeKdsReadyOrder(normalized);
+          writeOrders(readOrders().filter((order) => !isSameOrder(order, normalized)));
+          processedOrders.push(orderId);
+          continue;
+        }
+
+        if (statusKind === "dispatched") {
+          const detailUrl = `${CARDAPIO_PARTNER_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(orderId)}`;
+          const details = await fetchCardapioPartnerJson(detailUrl);
+          const normalized = normalizeOrder(details || changedOrder) || normalizeOrder(changedOrder);
+
+          if (normalized) {
+            writeOrders(readOrders().filter((order) => !isSameOrder(order, normalized)));
+            removeKdsReadyOrder(normalized);
+            recordDispatchedOrder(normalized, {
+              eventType: String(getDeepValue(changedOrder, ["status"]) || "").toUpperCase(),
+            });
+            processedOrders.push(orderId);
+            continue;
+          }
+        }
+
+        const detailUrl = `${CARDAPIO_PARTNER_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(orderId)}`;
+        const details = await fetchCardapioPartnerJson(detailUrl);
+        const result = await handleWebhook(details || changedOrder);
+
+        if (result.ok) {
+          processedOrders.push(orderId);
+        } else {
+          failedOrders.push({ orderId, message: result.message || "Pedido nao processado." });
+        }
+      } catch (error) {
+        failedOrders.push({ orderId, message: error.message });
+      }
+    }
+
+    partnerOrdersLastSuccessfulSyncAt = Date.now();
+
+    return {
+      ok: true,
+      action: "partner-orders-polled",
+      count: changedOrders.length,
+      processed: processedOrders.length,
+      failed: failedOrders.length,
+    };
+  })();
+
+  try {
+    return await partnerOrdersSyncInFlight;
+  } finally {
+    partnerOrdersSyncInFlight = null;
+  }
+}
+
 function extractOrdersList(payload) {
   if (Array.isArray(payload)) {
     return payload;
@@ -2367,7 +2551,7 @@ async function acknowledgeCardapioEvents(events) {
   return { ok: true, action: "acknowledged", count: acknowledgments.length };
 }
 
-async function syncOpenOrders() {
+async function syncOpenOrderEvents() {
   const token = await getCardapioToken(CARDAPIO_EVENTS_URL);
   const response = await fetch(CARDAPIO_EVENTS_URL, {
     headers: {
@@ -2441,8 +2625,52 @@ async function syncOpenOrders() {
   };
 }
 
+async function syncOpenOrders() {
+  const results = [];
+  const errors = [];
+
+  if (CARDAPIO_CLIENT_ID && CARDAPIO_CLIENT_SECRET) {
+    try {
+      results.push(await syncOpenOrderEvents());
+    } catch (error) {
+      errors.push({ source: "events", message: error.message });
+    }
+  }
+
+  if (cardapioPartnerApiKey()) {
+    try {
+      results.push(await syncPartnerModifiedOrders());
+    } catch (error) {
+      errors.push({ source: "partner-orders", message: error.message });
+    }
+  }
+
+  if (!results.length && !errors.length) {
+    return {
+      ok: true,
+      action: "sync-skipped",
+      message: "Credenciais do Cardapio Web nao configuradas.",
+    };
+  }
+
+  const count = results.reduce((total, result) => total + Number(result.count || 0), 0);
+  const processed = results.reduce((total, result) => total + Number(result.processed || 0), 0);
+  const failed = results.reduce((total, result) => total + Number(result.failed || 0), 0) + errors.length;
+
+  return {
+    ok: errors.length === 0,
+    action: errors.length ? "sync-partial" : "sync-completed",
+    count,
+    processed,
+    failed,
+    results,
+    errors,
+    message: errors.map((error) => `${error.source}: ${error.message}`).join(" | "),
+  };
+}
+
 async function syncOpenOrdersSafely() {
-  if (!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) {
+  if ((!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) && !cardapioPartnerApiKey()) {
     return;
   }
 
