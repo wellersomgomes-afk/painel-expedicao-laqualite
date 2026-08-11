@@ -66,6 +66,12 @@ function elapsedSeconds(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 1000);
 }
 
+function orderSortValue(order) {
+  const number = Number(order.number);
+
+  return Number.isFinite(number) ? number : Number(order.arrivedAt || 0);
+}
+
 function formatTimer(order) {
   const totalSeconds = elapsedSeconds(order);
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -262,7 +268,7 @@ function renderOrders() {
   const isEventsOpen = activeFilter === "events";
   const isMonitorOpen = activeFilter === "monitor";
   const isDispatchedOpen = activeFilter === "dispatched";
-  const activeOrders = [...orders].sort((a, b) => elapsedSeconds(b) - elapsedSeconds(a));
+  const activeOrders = [...orders].sort((a, b) => orderSortValue(a) - orderSortValue(b));
   const duplicateInfo = duplicateSignals(activeOrders);
   const deliveryOrders = activeOrders.filter(isDelivery);
   const pickupOrders = activeOrders.filter(isPickup);

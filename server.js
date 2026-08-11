@@ -3193,7 +3193,16 @@ function ordersWithKdsStatus() {
       ...order,
       kdsStatus: kdsStatusForOrder(order, readyOrders),
     }))
-    .sort((a, b) => b.arrivedAt - a.arrivedAt);
+    .sort((a, b) => {
+      const leftNumber = Number(a.number);
+      const rightNumber = Number(b.number);
+
+      if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+        return leftNumber - rightNumber;
+      }
+
+      return Number(a.arrivedAt || 0) - Number(b.arrivedAt || 0);
+    });
 }
 
 function removalEventKind(payload, normalizedOrder) {
