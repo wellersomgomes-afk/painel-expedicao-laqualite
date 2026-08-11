@@ -1104,7 +1104,7 @@ h1 {
 
 .dispatch-card {
   overflow: hidden;
-  width: 250px;
+  width: clamp(278px, 15.5vw, 330px);
   min-height: 250px;
   border: 1px solid #d7dee7;
   border-radius: 8px;
@@ -1992,7 +1992,7 @@ h1 {
   }
 
   .dispatch-card {
-    width: 230px;
+    width: clamp(248px, 22vw, 300px);
     min-height: 230px;
   }
 }
