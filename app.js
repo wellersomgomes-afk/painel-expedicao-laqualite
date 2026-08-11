@@ -29,6 +29,7 @@ const monitorMainStatus = document.querySelector("#monitor-main-status");
 const monitorSystem = document.querySelector("#monitor-system");
 const monitorStorage = document.querySelector("#monitor-storage");
 const monitorScreens = document.querySelector("#monitor-screens");
+const monitorMemory = document.querySelector("#monitor-memory");
 const monitorOrders = document.querySelector("#monitor-orders");
 const monitorReady = document.querySelector("#monitor-ready");
 const monitorDispatched = document.querySelector("#monitor-dispatched");
@@ -430,6 +431,7 @@ function renderMonitor() {
   monitorSystem.textContent = health?.ok ? "Online" : "Sem resposta";
   monitorStorage.textContent = isStorageOk ? "PostgreSQL conectado" : "Verificar banco";
   monitorScreens.textContent = String(health?.connectedScreens ?? 0);
+  monitorMemory.textContent = health?.memory ? `${health.memory.rssMb} MB` : "--";
   monitorOrders.textContent = String(health?.orders ?? orders.length);
   monitorReady.textContent = String(health?.readyOrders ?? 0);
   monitorDispatched.textContent = String(health?.dispatchedOrders ?? dispatchedOrders.length);

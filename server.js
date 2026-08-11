@@ -28,13 +28,18 @@ const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVA
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const HIDE_TEST_ORDERS =
   Boolean(process.env.RENDER) || process.env.HIDE_TEST_ORDERS === "true";
+const MAX_EVENTS_STORED = Number(process.env.MAX_EVENTS_STORED) || 12;
+const MAX_DISPATCHED_STORED = Number(process.env.MAX_DISPATCHED_STORED) || 80;
+const MAX_READY_STORED = Number(process.env.MAX_READY_STORED) || 120;
+const MAX_UPDATE_CLIENTS = Number(process.env.MAX_UPDATE_CLIENTS) || 20;
+const UPDATE_CLIENT_TTL_MS = Number(process.env.UPDATE_CLIENT_TTL_MS) || 10 * 60 * 1000;
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 const orderLocks = new Map();
 const storageCache = new Map();
 const storageWriteQueues = new Map();
-const eventClients = new Set();
+const eventClients = new Map();
 let storageMode = "json";
 let storageDb = null;
 let storageReady = false;
@@ -138,14 +143,15 @@ function defaultJsonValue(filePath) {
 function writeJsonFile(filePath, data) {
   ensureDataFile();
   const key = storageKeyFromFile(filePath);
+  const compactData = key ? compactStorageData(key, data) : data;
 
   if (storageMode === "postgres" && storageReady && key) {
-    storageCache.set(key, cloneJson(data));
-    queueStorageWrite(key, data);
+    storageCache.set(key, cloneJson(compactData));
+    queueStorageWrite(key, compactData);
     return;
   }
 
-  writeJsonFileDirect(filePath, data);
+  writeJsonFileDirect(filePath, compactData);
 }
 
 function writeJsonFileDirect(filePath, data) {
@@ -161,6 +167,37 @@ function cloneJson(value) {
 
 function storageKeyFromFile(filePath) {
   return path.basename(filePath, ".json");
+}
+
+function compactStorageData(key, data) {
+  if (!Array.isArray(data)) {
+    return data;
+  }
+
+  if (key === storageKeyFromFile(EVENTS_FILE)) {
+    return data.slice(0, MAX_EVENTS_STORED);
+  }
+
+  if (key === storageKeyFromFile(ORDERS_FILE)) {
+    return data
+      .filter((order) =>
+        !demoOrderNumbers.has(String(order.number)) &&
+        order.orderId &&
+        order.orderId !== order.number &&
+        shouldShowWorkdayOrder(order)
+      )
+      .slice(0, 300);
+  }
+
+  if (key === storageKeyFromFile(KDS_READY_FILE)) {
+    return data.filter(shouldShowWorkdayOrder).slice(0, MAX_READY_STORED);
+  }
+
+  if (key === storageKeyFromFile(DISPATCHED_FILE)) {
+    return data.filter(shouldShowWorkdayOrder).slice(0, MAX_DISPATCHED_STORED);
+  }
+
+  return data;
 }
 
 function storageFileEntries() {
@@ -203,11 +240,17 @@ async function initializeStorage() {
       const dbResult = await storageDb.query("SELECT data FROM app_state WHERE key = $1", [key]);
 
       if (dbResult.rows.length) {
-        storageCache.set(key, dbResult.rows[0].data);
+        const compactData = compactStorageData(key, dbResult.rows[0].data);
+        storageCache.set(key, compactData);
+
+        if (JSON.stringify(compactData) !== JSON.stringify(dbResult.rows[0].data)) {
+          await persistStorageValue(key, compactData);
+        }
+
         continue;
       }
 
-      const fileData = readJsonFileDirect(filePath);
+      const fileData = compactStorageData(key, readJsonFileDirect(filePath));
       storageCache.set(key, fileData);
       await persistStorageValue(key, fileData);
     }
@@ -260,6 +303,32 @@ function queueStorageWrite(key, data) {
   storageWriteQueues.set(key, next);
 }
 
+function compactOperationalState() {
+  const entries = [
+    [ORDERS_FILE, "orders"],
+    [EVENTS_FILE, "events"],
+    [DISPATCHED_FILE, "dispatched-orders"],
+    [KDS_READY_FILE, "kds-ready-orders"],
+  ];
+
+  for (const [filePath, notifyType] of entries) {
+    const key = storageKeyFromFile(filePath);
+    const currentData = readJsonFile(filePath);
+    const compactData = compactStorageData(key, currentData);
+
+    if (JSON.stringify(currentData) !== JSON.stringify(compactData)) {
+      writeJsonFile(filePath, compactData);
+      notifyDataChanged(notifyType);
+    }
+  }
+
+  pruneEventClients();
+
+  if (typeof global.gc === "function") {
+    global.gc();
+  }
+}
+
 function notifyDataChanged(type = "data") {
   dataVersion += 1;
   const payload = JSON.stringify({
@@ -268,12 +337,18 @@ function notifyDataChanged(type = "data") {
     updatedAt: formatLocalDateTime(),
   });
 
-  for (const client of eventClients) {
-    client.write(`event: update\ndata: ${payload}\n\n`);
+  for (const [client] of eventClients) {
+    try {
+      client.write(`event: update\ndata: ${payload}\n\n`);
+    } catch (error) {
+      eventClients.delete(client);
+    }
   }
 }
 
 function openEventStream(request, response) {
+  pruneEventClients();
+
   response.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -281,16 +356,50 @@ function openEventStream(request, response) {
   });
 
   response.write(`event: ready\ndata: ${JSON.stringify({ version: dataVersion })}\n\n`);
-  eventClients.add(response);
+  eventClients.set(response, Date.now());
 
   request.on("close", () => {
     eventClients.delete(response);
   });
 }
 
+function pruneEventClients() {
+  const now = Date.now();
+
+  for (const [client, connectedAt] of eventClients) {
+    if (now - connectedAt > UPDATE_CLIENT_TTL_MS || client.destroyed || client.writableEnded) {
+      eventClients.delete(client);
+
+      try {
+        client.end();
+      } catch (error) {}
+    }
+  }
+
+  while (eventClients.size > MAX_UPDATE_CLIENTS) {
+    const oldestClient = eventClients.keys().next().value;
+
+    if (!oldestClient) {
+      break;
+    }
+
+    eventClients.delete(oldestClient);
+
+    try {
+      oldestClient.end();
+    } catch (error) {}
+  }
+}
+
 function pingEventClients() {
-  for (const client of eventClients) {
-    client.write(`event: ping\ndata: ${JSON.stringify({ version: dataVersion })}\n\n`);
+  pruneEventClients();
+
+  for (const [client] of eventClients) {
+    try {
+      client.write(`event: ping\ndata: ${JSON.stringify({ version: dataVersion })}\n\n`);
+    } catch (error) {
+      eventClients.delete(client);
+    }
   }
 }
 
@@ -360,7 +469,7 @@ function readEvents() {
 }
 
 function writeEvents(events) {
-  writeJsonFile(EVENTS_FILE, events.slice(0, 30));
+  writeJsonFile(EVENTS_FILE, events.slice(0, MAX_EVENTS_STORED));
   notifyDataChanged("events");
 }
 
@@ -521,7 +630,7 @@ function sectorsFromCategoryIds(categoryIds) {
 }
 
 function writeDispatchedOrders(orders) {
-  writeJsonFile(DISPATCHED_FILE, orders.slice(0, 50));
+  writeJsonFile(DISPATCHED_FILE, orders.slice(0, MAX_DISPATCHED_STORED));
   notifyDataChanged("dispatched-orders");
 }
 
@@ -542,7 +651,7 @@ function readKdsReadyOrders() {
 }
 
 function writeKdsReadyOrders(orders) {
-  writeJsonFile(KDS_READY_FILE, orders.slice(0, 300));
+  writeJsonFile(KDS_READY_FILE, orders.slice(0, MAX_READY_STORED));
   notifyDataChanged("kds-ready-orders");
 }
 
@@ -1038,6 +1147,16 @@ function sendJson(response, statusCode, data) {
   response.end(JSON.stringify(data));
 }
 
+function memorySnapshot() {
+  const memory = process.memoryUsage();
+
+  return {
+    rssMb: Math.round(memory.rss / 1024 / 1024),
+    heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+    heapTotalMb: Math.round(memory.heapTotal / 1024 / 1024),
+  };
+}
+
 function healthSnapshot() {
   return {
     ok: true,
@@ -1049,6 +1168,7 @@ function healthSnapshot() {
     pendingOrderActions: orderLocks.size,
     pendingStorageWrites: storageWriteQueues.size,
     connectedScreens: eventClients.size,
+    memory: memorySnapshot(),
     orders: readOrders().length,
     readyOrders: readKdsReadyOrders().length,
     dispatchedOrders: readDispatchedOrders().length,
@@ -3173,6 +3293,8 @@ const server = http.createServer(async (request, response) => {
 });
 
 initializeStorage().then(() => {
+  compactOperationalState();
+
   server.listen(PORT, HOST, () => {
     console.log(`Painel rodando em http://localhost:${PORT}`);
     console.log(`Webhook local: http://localhost:${PORT}/api/webhook/cardapio-web`);
@@ -3180,5 +3302,6 @@ initializeStorage().then(() => {
     setTimeout(syncOpenOrdersSafely, 5000);
     setInterval(syncOpenOrdersSafely, SYNC_OPEN_ORDERS_INTERVAL_MS);
     setInterval(pingEventClients, 25000);
+    setInterval(compactOperationalState, 5 * 60 * 1000);
   });
 });
