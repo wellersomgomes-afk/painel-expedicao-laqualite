@@ -95,7 +95,7 @@ function isTestOrderRecord(order) {
 }
 
 function shouldShowWorkdayOrder(order) {
-  return isActiveWorkdayOrder(order) && (!HIDE_TEST_ORDERS || !isTestOrderRecord(order));
+  return isActiveWorkdayOrder(order) && (!HIDE_TEST_ORDERS || !isTestOrderRecord(order) || order?.loadTest === true);
 }
 
 function ensureDataFile() {
@@ -2166,6 +2166,130 @@ function normalizeSyncedOrders(payload, previousOrders) {
     });
 }
 
+function testOrderItem(kind, index) {
+  const items = {
+    pizza: {
+      name: index % 2 === 0 ? "Pizza Calabresa" : "PIZZAS BROTO - 1 SABOR",
+      quantity: 1,
+      category: "PIZZAS SALGADAS - TODOS OS SABORES",
+      complements: [
+        { name: index % 2 === 0 ? "Calabresa" : "Bauru", quantity: 1 },
+        { name: "Nao enviar KETCHUP", quantity: 1 },
+      ],
+      notes: index % 5 === 0 ? "Caprichar na borda" : "",
+      pdvCodes: ["PIZZA"],
+      categoryIds: ["pizza"],
+    },
+    esfiha: {
+      name: index % 3 === 0 ? "Combo 4" : "Esfihas Especiais",
+      quantity: index % 3 === 0 ? 2 : 3,
+      category: "ESFIHAS & COMBOS",
+      complements: [
+        { name: index % 3 === 0 ? "Coca Cola 1,5 ZERO" : "Calabresa Com Queijo", quantity: 1 },
+        { name: "Nao enviar KETCHUP", quantity: 1 },
+      ],
+      notes: "",
+      pdvCodes: [index % 3 === 0 ? "COMBO4" : "ESFIHAESP"],
+      categoryIds: ["esfihas"],
+    },
+    porcao: {
+      name: index % 2 === 0 ? "Fritas 400G" : "Suco Polpas Natural",
+      quantity: 1,
+      category: index % 2 === 0 ? "PORCOES" : "SUCOS",
+      complements: [
+        { name: index % 2 === 0 ? "Nao enviar KETCHUP" : "Acerola 1L", quantity: 1 },
+      ],
+      notes: index % 4 === 0 ? "Separar bem embalado" : "",
+      pdvCodes: [index % 2 === 0 ? "PORCAOFRITAS" : "SUCO"],
+      categoryIds: [index % 2 === 0 ? "porcoes" : "sucos"],
+    },
+  };
+  const item = items[kind] || items.pizza;
+
+  return {
+    ...item,
+    sectors: sectorKeysForItem(item),
+    searchText: `${item.category} ${item.name}`,
+  };
+}
+
+function testOrderItems(index) {
+  if (index % 4 === 0) return [testOrderItem("pizza", index)];
+  if (index % 4 === 1) return [testOrderItem("esfiha", index)];
+  if (index % 4 === 2) return [testOrderItem("porcao", index)];
+
+  return [
+    testOrderItem("pizza", index),
+    testOrderItem("esfiha", index),
+    testOrderItem("porcao", index),
+  ];
+}
+
+function createTestOrders(payload = {}) {
+  const count = Math.min(Math.max(Number(payload.count || 50), 1), 80);
+  const now = Date.now();
+  const neighborhoods = ["Centro", "Vila Nova", "Parque Industrial", "Moreira", "Jardim Renascenca"];
+  const orders = readOrders().filter((order) => !isTestOrderRecord(order));
+  const testOrders = Array.from({ length: count }, (_, index) => {
+    const number = 9001 + index;
+    const isPickup = index % 5 === 0;
+
+    return {
+      number: String(number),
+      orderId: `teste-carga-${number}`,
+      loadTest: true,
+      customer: `Teste ${String(index + 1).padStart(2, "0")}`,
+      phone: "",
+      fulfillmentType: isPickup ? "pickup" : "delivery",
+      neighborhood: isPickup ? "" : neighborhoods[index % neighborhoods.length],
+      city: isPickup ? "" : "Mirassol",
+      address: isPickup ? "" : `Rua Teste, ${100 + index}`,
+      arrivedAt: now - index * 45000,
+      lastSeenOpenAt: now,
+      total: 0,
+      payment: "Teste",
+      notes: "Pedido teste de carga",
+      items: testOrderItems(index),
+      orderURL: `/api/test-orders/${number}`,
+    };
+  });
+
+  writeOrders([...orders, ...testOrders]);
+  writeKdsReadyOrders(readKdsReadyOrders().filter((order) => !isTestOrderRecord(order)));
+  writeDispatchedOrders(readDispatchedOrders().filter((order) => !isTestOrderRecord(order)));
+  recordSystemEvent({ source: "monitor", test: true, count }, {
+    ok: true,
+    action: "test-orders-created",
+    count,
+  });
+
+  return { ok: true, action: "test-orders-created", count };
+}
+
+function clearTestOrders() {
+  const orders = readOrders();
+  const readyOrders = readKdsReadyOrders();
+  const dispatchedOrders = readDispatchedOrders();
+  const nextOrders = orders.filter((order) => !isTestOrderRecord(order));
+  const nextReadyOrders = readyOrders.filter((order) => !isTestOrderRecord(order));
+  const nextDispatchedOrders = dispatchedOrders.filter((order) => !isTestOrderRecord(order));
+  const count =
+    orders.length - nextOrders.length +
+    readyOrders.length - nextReadyOrders.length +
+    dispatchedOrders.length - nextDispatchedOrders.length;
+
+  writeOrders(nextOrders);
+  writeKdsReadyOrders(nextReadyOrders);
+  writeDispatchedOrders(nextDispatchedOrders);
+  recordSystemEvent({ source: "monitor", test: true }, {
+    ok: true,
+    action: "test-orders-cleared",
+    count,
+  });
+
+  return { ok: true, action: "test-orders-cleared", count };
+}
+
 function extractEventsList(payload) {
   if (Array.isArray(payload)) {
     return payload;
@@ -3119,7 +3243,7 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -3161,6 +3285,23 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && url.pathname === "/api/clear-dispatched-orders") {
     const result = clearDispatchedOrders();
     recordSystemEvent({ source: "monitor", manual: true }, result);
+    sendJson(response, 200, result);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/create-test-orders") {
+    try {
+      const body = await readBody(request);
+      const result = createTestOrders(body);
+      sendJson(response, 200, result);
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: "Carga de teste invalida." });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/clear-test-orders") {
+    const result = clearTestOrders();
     sendJson(response, 200, result);
     return;
   }

@@ -42,6 +42,8 @@ const monitorError = document.querySelector("#monitor-error");
 const monitorLastEvent = document.querySelector("#monitor-last-event");
 const monitorRefresh = document.querySelector("#monitor-refresh");
 const monitorSync = document.querySelector("#monitor-sync");
+const monitorCreateTests = document.querySelector("#monitor-create-tests");
+const monitorClearTests = document.querySelector("#monitor-clear-tests");
 const monitorClearDispatched = document.querySelector("#monitor-clear-dispatched");
 const monitorSystemCard = document.querySelector("#monitor-system-card");
 const monitorStorageCard = document.querySelector("#monitor-storage-card");
@@ -584,6 +586,72 @@ async function clearDispatchedNow() {
   }, 4000);
 }
 
+async function createTestOrdersNow() {
+  if (!monitorCreateTests) {
+    return;
+  }
+
+  monitorCreateTests.disabled = true;
+  monitorMessage = "Criando pedidos teste...";
+  renderMonitor();
+
+  try {
+    const response = await fetch("/api/create-test-orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count: 50 }),
+    });
+    const result = await response.json();
+    monitorMessage = result.ok
+      ? `${result.count || 0} pedido(s) teste criado(s)`
+      : result.message || "Falha ao criar testes";
+  } catch (error) {
+    monitorMessage = "Falha ao chamar carga de teste";
+  }
+
+  await Promise.all([loadOrders(), loadEvents(), loadDispatchedOrders(), loadHealth()]);
+  monitorCreateTests.disabled = false;
+
+  setTimeout(() => {
+    monitorMessage = "";
+    renderMonitor();
+  }, 4000);
+}
+
+async function clearTestOrdersNow() {
+  if (!monitorClearTests) {
+    return;
+  }
+
+  const confirmed = window.confirm("Limpar somente os pedidos teste? Pedidos reais nao serao apagados.");
+
+  if (!confirmed) {
+    return;
+  }
+
+  monitorClearTests.disabled = true;
+  monitorMessage = "Limpando pedidos teste...";
+  renderMonitor();
+
+  try {
+    const response = await fetch("/api/clear-test-orders", { method: "POST" });
+    const result = await response.json();
+    monitorMessage = result.ok
+      ? `${result.count || 0} registro(s) teste removido(s)`
+      : result.message || "Falha ao limpar testes";
+  } catch (error) {
+    monitorMessage = "Falha ao chamar limpeza de testes";
+  }
+
+  await Promise.all([loadOrders(), loadEvents(), loadDispatchedOrders(), loadHealth()]);
+  monitorClearTests.disabled = false;
+
+  setTimeout(() => {
+    monitorMessage = "";
+    renderMonitor();
+  }, 4000);
+}
+
 function scheduleLiveRefresh() {
   clearTimeout(liveRefreshTimer);
   liveRefreshTimer = setTimeout(() => {
@@ -652,6 +720,14 @@ if (monitorRefresh) {
 
 if (monitorSync) {
   monitorSync.addEventListener("click", syncNow);
+}
+
+if (monitorCreateTests) {
+  monitorCreateTests.addEventListener("click", createTestOrdersNow);
+}
+
+if (monitorClearTests) {
+  monitorClearTests.addEventListener("click", clearTestOrdersNow);
 }
 
 if (monitorClearDispatched) {
