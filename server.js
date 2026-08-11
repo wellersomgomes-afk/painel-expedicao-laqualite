@@ -2709,6 +2709,15 @@ function removalEventKind(payload, normalizedOrder) {
     payload.type,
     payload.status,
     payload.action,
+    findValueByKeyNames(payload, [
+      "orderStatus",
+      "productionStatus",
+      "kdsStatus",
+      "preparationStatus",
+      "statusCode",
+      "situacao",
+      "situacaoPedido",
+    ]),
     normalizedOrder?.rawStatus,
   ]
     .filter(Boolean)
@@ -2749,11 +2758,21 @@ function removalEventKind(payload, normalizedOrder) {
 function isProductionReadyEvent(payload, normalizedOrder) {
   const eventType = String(payload.eventType || "").toUpperCase();
 
-  if (eventType === "READY") {
+  if (["READY", "ORDER_READY", "PRODUCTION_READY", "PREPARED", "PRONTO"].includes(eventType)) {
     return true;
   }
 
-  if (["READY_FOR_PICKUP", "DISPATCHED", "OUT_FOR_DELIVERY"].includes(eventType)) {
+  if ([
+    "READY_FOR_PICKUP",
+    "DISPATCHED",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "CONCLUDED",
+    "FINISHED",
+    "COMPLETED",
+    "CANCELED",
+    "CANCELLED",
+  ].includes(eventType)) {
     return false;
   }
 
@@ -2763,15 +2782,45 @@ function isProductionReadyEvent(payload, normalizedOrder) {
     payload.type,
     payload.status,
     payload.action,
+    findValueByKeyNames(payload, [
+      "orderStatus",
+      "productionStatus",
+      "kdsStatus",
+      "preparationStatus",
+      "statusCode",
+      "situacao",
+      "situacaoPedido",
+    ]),
     normalizedOrder?.rawStatus,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 
+  if ([
+    "ready_for_pickup",
+    "ready for pickup",
+    "pronto para retirada",
+    "retirada",
+    "pickup",
+    "dispatch",
+    "despach",
+    "out_for_delivery",
+    "cancel",
+    "concluded",
+    "completed",
+    "finished",
+    "delivered",
+  ].some((word) => eventText.includes(word))) {
+    return false;
+  }
+
   return [
     "production_ready",
     "order_ready",
+    "prepared",
+    "ready",
+    "pronto",
     "pedido pronto",
     "producao pronta",
     "produção pronta",
