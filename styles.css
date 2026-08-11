@@ -1104,7 +1104,7 @@ h1 {
 
 .dispatch-card {
   overflow: hidden;
-  width: clamp(278px, 15.5vw, 330px);
+  width: 250px;
   min-height: 250px;
   border: 1px solid #d7dee7;
   border-radius: 8px;
@@ -1314,8 +1314,8 @@ h1 {
 }
 
 .dispatch-main strong {
-  font-size: 20px;
-  line-height: 1;
+  font-size: 18px;
+  line-height: 1.08;
 }
 
 .dispatch-main span {
@@ -1376,9 +1376,9 @@ h1 {
 .dispatch-item-line strong,
 .dispatch-item-line span {
   color: #30455b;
-  font-size: 14px;
-  font-weight: 900;
-  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .dispatch-item-line span {
@@ -1388,16 +1388,16 @@ h1 {
 .dispatch-detail {
   padding-left: 32px;
   color: #526174;
-  font-size: 13px;
-  line-height: 1.2;
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .dispatch-note {
   padding-left: 32px;
   color: #f35b04;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .dispatched-kds-card .dispatch-card-head {
@@ -1992,7 +1992,7 @@ h1 {
   }
 
   .dispatch-card {
-    width: clamp(248px, 22vw, 300px);
+    width: 230px;
     min-height: 230px;
   }
 }
