@@ -615,6 +615,27 @@ function kdsItemKey(item, index) {
   return `${index}:${String(item.name || "").toLowerCase()}`;
 }
 
+function kdsItemFingerprint(item) {
+  const complements = (item.complements || [])
+    .map((complement) => ({
+      name: normalizeText(complement.name || ""),
+      quantity: Number(complement.quantity || 0),
+      notes: normalizeText(complement.notes || ""),
+      pdvCodes: [...(complement.pdvCodes || [])].map(normalizePdvCode).sort(),
+      categoryIds: [...(complement.categoryIds || [])].map(String).sort(),
+    }))
+    .sort((a, b) => `${a.name}:${a.quantity}`.localeCompare(`${b.name}:${b.quantity}`));
+
+  return JSON.stringify({
+    name: normalizeText(item.name || ""),
+    quantity: Number(item.quantity || 0),
+    notes: normalizeText(item.notes || ""),
+    pdvCodes: [...(item.pdvCodes || [])].map(normalizePdvCode).sort(),
+    categoryIds: [...(item.categoryIds || [])].map(String).sort(),
+    complements,
+  });
+}
+
 function isProductionKdsItem(item) {
   const classification = classifyProductionItem(item);
 
@@ -635,7 +656,26 @@ function isKdsOrderComplete(order, readyOrder) {
   return productionKeys.length > 0 && productionKeys.every((key) => readyItems.has(key));
 }
 
-function reconcileKdsReadyOrder(order) {
+function changedProductionItemKeys(previousOrder, nextOrder) {
+  if (!previousOrder || !Array.isArray(previousOrder.items) || !Array.isArray(nextOrder.items)) {
+    return [];
+  }
+
+  const previousItems = new Map(
+    previousOrder.items
+      .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
+      .filter(({ item }) => isProductionKdsItem(item))
+      .map(({ item, key }) => [key, kdsItemFingerprint(item)])
+  );
+
+  return nextOrder.items
+    .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
+    .filter(({ item }) => isProductionKdsItem(item))
+    .filter(({ item, key }) => previousItems.has(key) && previousItems.get(key) !== kdsItemFingerprint(item))
+    .map(({ key }) => key);
+}
+
+function reconcileKdsReadyOrder(order, previousOrder = null) {
   const readyOrders = readKdsReadyOrders();
   const readyIndex = readyOrders.findIndex((item) => isSameOrder(item, order));
 
@@ -645,7 +685,10 @@ function reconcileKdsReadyOrder(order) {
 
   const readyOrder = readyOrders[readyIndex];
   const productionKeys = new Set(productionItemKeys(order));
-  const readyItems = (readyOrder.readyItems || []).filter((key) => productionKeys.has(key));
+  const changedItems = new Set(changedProductionItemKeys(previousOrder, order));
+  const readyItems = (readyOrder.readyItems || [])
+    .filter((key) => productionKeys.has(key))
+    .filter((key) => !changedItems.has(key));
   const isComplete = productionKeys.size > 0 && [...productionKeys].every((key) => readyItems.includes(key));
   const nextReady = {
     ...readyOrder,
@@ -2893,6 +2936,7 @@ async function handleWebhook(payload) {
   }
 
   const activeOrder = { ...normalizedOrder, lastSeenOpenAt: Date.now() };
+  const previousOrder = currentIndex >= 0 ? orders[currentIndex] : null;
 
   if (currentIndex >= 0) {
     orders[currentIndex] = { ...orders[currentIndex], ...activeOrder };
@@ -2901,7 +2945,7 @@ async function handleWebhook(payload) {
   }
 
   writeOrders(orders);
-  reconcileKdsReadyOrder(activeOrder);
+  reconcileKdsReadyOrder(activeOrder, previousOrder);
 
   if (isProductionReadyEvent({ ...payload, ...payloadForOrder }, activeOrder)) {
     const readyResult = markKdsOrderReadyFromCardapio(activeOrder);
