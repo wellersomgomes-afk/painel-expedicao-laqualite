@@ -734,6 +734,36 @@ async function markKdsItemReady(target) {
   return withOrderLock(target, () => saveKdsReadyItems(target, "kds-item-ready"));
 }
 
+function markKdsOrderReadyFromCardapio(order) {
+  const productionKeys = productionItemKeys(order);
+
+  if (productionKeys.length === 0) {
+    return { ok: true, action: "cardapio-ready-without-production", order: order.number };
+  }
+
+  const readyOrders = readKdsReadyOrders();
+  const readyIndex = readyOrders.findIndex((item) => isSameOrder(item, order));
+  const currentReady = readyIndex >= 0 ? readyOrders[readyIndex] : {};
+  const readyOrder = {
+    ...currentReady,
+    number: order.number,
+    orderId: order.orderId,
+    customer: order.customer,
+    readyItems: productionKeys,
+    readyAt: Date.now(),
+  };
+
+  if (readyIndex >= 0) {
+    readyOrders[readyIndex] = readyOrder;
+  } else {
+    readyOrders.unshift(readyOrder);
+  }
+
+  writeKdsReadyOrders(readyOrders);
+
+  return { ok: true, action: "cardapio-ready-synced", order: order.number };
+}
+
 function recordDispatchedOrder(order, payload) {
   const dispatchedOrders = readDispatchedOrders();
   const dispatchedOrder = {
@@ -2716,6 +2746,38 @@ function removalEventKind(payload, normalizedOrder) {
   return "";
 }
 
+function isProductionReadyEvent(payload, normalizedOrder) {
+  const eventType = String(payload.eventType || "").toUpperCase();
+
+  if (eventType === "READY") {
+    return true;
+  }
+
+  if (["READY_FOR_PICKUP", "DISPATCHED", "OUT_FOR_DELIVERY"].includes(eventType)) {
+    return false;
+  }
+
+  const eventText = [
+    payload.eventType,
+    payload.event,
+    payload.type,
+    payload.status,
+    payload.action,
+    normalizedOrder?.rawStatus,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return [
+    "production_ready",
+    "order_ready",
+    "pedido pronto",
+    "producao pronta",
+    "produção pronta",
+  ].some((word) => eventText.includes(word));
+}
+
 function isDispatchEvent(payload, normalizedOrder) {
   return Boolean(removalEventKind(payload, normalizedOrder));
 }
@@ -2791,6 +2853,14 @@ async function handleWebhook(payload) {
 
   writeOrders(orders);
   reconcileKdsReadyOrder(activeOrder);
+
+  if (isProductionReadyEvent({ ...payload, ...payloadForOrder }, activeOrder)) {
+    const readyResult = markKdsOrderReadyFromCardapio(activeOrder);
+    recordSystemEvent(
+      { order: activeOrder.number, orderId: activeOrder.orderId, source: "cardapio-ready" },
+      readyResult
+    );
+  }
 
   return {
     ok: true,
