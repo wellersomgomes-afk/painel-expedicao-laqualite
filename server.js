@@ -29,7 +29,7 @@ const CARDAPIO_EVENTS_URL =
   process.env.CARDAPIO_EVENTS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/events:polling";
 const CARDAPIO_EVENTS_ACK_URL = process.env.CARDAPIO_EVENTS_ACK_URL || "";
-const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 60000;
+const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 30000;
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const HIDE_TEST_ORDERS =
   Boolean(process.env.RENDER) || process.env.HIDE_TEST_ORDERS === "true";
