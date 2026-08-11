@@ -628,6 +628,43 @@ function productionItemKeys(order) {
     .map(({ key }) => key);
 }
 
+function isKdsOrderComplete(order, readyOrder) {
+  const productionKeys = productionItemKeys(order);
+  const readyItems = new Set(readyOrder?.readyItems || []);
+
+  return productionKeys.length > 0 && productionKeys.every((key) => readyItems.has(key));
+}
+
+function reconcileKdsReadyOrder(order) {
+  const readyOrders = readKdsReadyOrders();
+  const readyIndex = readyOrders.findIndex((item) => isSameOrder(item, order));
+
+  if (readyIndex < 0) {
+    return;
+  }
+
+  const readyOrder = readyOrders[readyIndex];
+  const productionKeys = new Set(productionItemKeys(order));
+  const readyItems = (readyOrder.readyItems || []).filter((key) => productionKeys.has(key));
+  const isComplete = productionKeys.size > 0 && [...productionKeys].every((key) => readyItems.includes(key));
+  const nextReady = {
+    ...readyOrder,
+    number: order.number,
+    orderId: order.orderId,
+    customer: order.customer,
+    readyItems,
+    readyAt: isComplete ? readyOrder.readyAt : null,
+  };
+
+  if (readyItems.length === 0 && !nextReady.readyAt) {
+    readyOrders.splice(readyIndex, 1);
+  } else {
+    readyOrders[readyIndex] = nextReady;
+  }
+
+  writeKdsReadyOrders(readyOrders);
+}
+
 function isPizzaKdsItem(item) {
   const text = normalizeText(`${item.category || ""} ${item.name || ""}`);
 
@@ -661,8 +698,8 @@ async function saveKdsReadyItems(target, source) {
   const isOrderReady = pendingProductionKeys.length > 0 && pendingProductionKeys.every((key) => readyItems.has(key));
   const nextReady = {
     ...currentReady,
-    readyItems: [...readyItems].filter(Boolean),
-    readyAt: isOrderReady ? Date.now() : currentReady.readyAt,
+    readyItems: [...readyItems].filter((key) => pendingProductionKeys.includes(key)),
+    readyAt: isOrderReady ? Date.now() : null,
   };
 
   if (readyIndex >= 0) {
@@ -2458,7 +2495,7 @@ function buildKdsOrders() {
 
   return readOrders()
     .filter((order) => Array.isArray(order.items) && order.items.length > 0)
-    .filter((order) => !readyOrders.some((readyOrder) => isSameOrder(order, readyOrder) && readyOrder.readyAt))
+    .filter((order) => !readyOrders.some((readyOrder) => isSameOrder(order, readyOrder) && isKdsOrderComplete(order, readyOrder)))
     .sort((a, b) => a.arrivedAt - b.arrivedAt)
     .map((order) => {
       const readyOrder = readyOrders.find((item) => isSameOrder(item, order));
@@ -2508,7 +2545,7 @@ function buildKdsReadyOrders() {
         fulfillmentType: order.fulfillmentType,
         neighborhood: order.neighborhood,
         arrivedAt: order.arrivedAt,
-        readyAt: readyOrder.readyAt,
+        readyAt: isKdsOrderComplete(order, readyOrder) ? readyOrder.readyAt : null,
         notes: order.notes || "",
         items: order.items
           .map((item, index) => ({
@@ -2517,7 +2554,7 @@ function buildKdsReadyOrders() {
             notes: item.notes || extractNoteText(item),
           }))
           .filter((item) => isProductionKdsItem(item))
-          .filter((item) => readyOrder.readyAt || (readyOrder.readyItems || []).includes(item.kdsItemKey)),
+          .filter((item) => isKdsOrderComplete(order, readyOrder) || (readyOrder.readyItems || []).includes(item.kdsItemKey)),
       };
     })
     .filter(Boolean)
@@ -2559,7 +2596,7 @@ function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
   const readyItems = new Set(readyOrder?.readyItems || []);
   const readyCount = productionKeys.filter((key) => readyItems.has(key)).length;
 
-  if (readyOrder?.readyAt || readyCount >= productionKeys.length) {
+  if (readyCount >= productionKeys.length) {
     return {
       label: "Pronto",
       state: "ready",
@@ -2753,6 +2790,8 @@ async function handleWebhook(payload) {
   }
 
   writeOrders(orders);
+  reconcileKdsReadyOrder(activeOrder);
+
   return {
     ok: true,
     action: "saved",
