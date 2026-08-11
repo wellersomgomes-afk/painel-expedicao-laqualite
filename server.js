@@ -669,6 +669,10 @@ function isSameOrder(left, right) {
   );
 }
 
+function isOrderAlreadyDispatched(order) {
+  return readDispatchedOrders().some((dispatchedOrder) => isSameOrder(dispatchedOrder, order));
+}
+
 function cardapioOrderUrl(order) {
   if (order.orderURL) {
     return order.orderURL;
@@ -3071,9 +3075,11 @@ function buildKdsOrders() {
 function buildKdsReadyOrders() {
   const orders = readOrders();
   const readyOrders = readKdsReadyOrders();
+  const dispatchedOrders = readDispatchedOrders();
 
   return readyOrders
     .filter((readyOrder) => readyOrder.readyAt || (readyOrder.readyItems || []).length > 0)
+    .filter((readyOrder) => !dispatchedOrders.some((dispatchedOrder) => isSameOrder(dispatchedOrder, readyOrder)))
     .map((readyOrder) => {
       const order = orders.find((item) => isSameOrder(item, readyOrder));
 
@@ -3404,6 +3410,18 @@ async function handleWebhook(payload) {
   }
 
   const activeOrder = { ...normalizedOrder, lastSeenOpenAt: Date.now() };
+
+  if (isOrderAlreadyDispatched(activeOrder)) {
+    removeKdsReadyOrder(activeOrder);
+    writeOrders(orders.filter((order) => !isSameOrder(order, activeOrder)));
+
+    return {
+      ok: true,
+      action: "already-dispatched",
+      order: normalizedOrder.number,
+    };
+  }
+
   const previousOrder = currentIndex >= 0 ? orders[currentIndex] : null;
 
   if (currentIndex >= 0) {
