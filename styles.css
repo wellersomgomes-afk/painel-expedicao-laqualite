@@ -1110,6 +1110,7 @@ h1 {
   border-radius: 8px;
   background: #ffffff;
   color: #30455b;
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
   box-shadow: 0 1px 4px rgba(16, 24, 40, 0.14);
 }
 
@@ -1412,15 +1413,17 @@ h1 {
 @media (min-width: 1400px) {
   .kds-dispatch-mode .dispatch-card {
     -webkit-font-smoothing: antialiased;
-    text-rendering: geometricPrecision;
+    text-rendering: optimizeLegibility;
   }
 
   .kds-dispatch-mode .dispatch-select-button {
     font-size: 13px;
+    font-weight: 800;
   }
 
   .kds-dispatch-mode .dispatch-main strong {
     font-size: 21px;
+    font-weight: 800;
     line-height: 1.1;
   }
 
@@ -1432,18 +1435,20 @@ h1 {
   .kds-dispatch-mode .dispatch-state,
   .kds-dispatch-mode .dispatch-top-action {
     font-size: 15px;
+    font-weight: 800;
   }
 
   .kds-dispatch-mode .dispatch-item-line strong,
   .kds-dispatch-mode .dispatch-item-line span {
     font-size: 15px;
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1.25;
   }
 
   .kds-dispatch-mode .dispatch-detail,
   .kds-dispatch-mode .dispatch-note {
     font-size: 14px;
+    font-weight: 600;
     line-height: 1.25;
   }
 }
