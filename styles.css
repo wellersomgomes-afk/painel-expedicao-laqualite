@@ -1409,6 +1409,45 @@ h1 {
   color: #526174;
 }
 
+@media (min-width: 1400px) {
+  .kds-dispatch-mode .dispatch-card {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  .kds-dispatch-mode .dispatch-select-button {
+    font-size: 13px;
+  }
+
+  .kds-dispatch-mode .dispatch-main strong {
+    font-size: 21px;
+    line-height: 1.1;
+  }
+
+  .kds-dispatch-mode .dispatch-main span,
+  .kds-dispatch-mode .dispatch-time {
+    font-size: 14px;
+  }
+
+  .kds-dispatch-mode .dispatch-state,
+  .kds-dispatch-mode .dispatch-top-action {
+    font-size: 15px;
+  }
+
+  .kds-dispatch-mode .dispatch-item-line strong,
+  .kds-dispatch-mode .dispatch-item-line span {
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.25;
+  }
+
+  .kds-dispatch-mode .dispatch-detail,
+  .kds-dispatch-mode .dispatch-note {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+}
+
 .dispatched-kds-body {
   display: grid;
   gap: 8px;
