@@ -786,7 +786,7 @@ function dispatchableItemKeys(order) {
 }
 
 function isKdsOrderComplete(order, readyOrder) {
-  const productionKeys = dispatchableItemKeys(order);
+  const productionKeys = productionItemKeys(order);
   const readyItems = new Set(readyOrder?.readyItems || []);
 
   return productionKeys.length > 0 && productionKeys.every((key) => readyItems.has(key));
@@ -800,13 +800,13 @@ function changedProductionItemKeys(previousOrder, nextOrder) {
   const previousItems = new Map(
     previousOrder.items
       .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
-      .filter(({ item }) => isDispatchableKdsItem(item))
+      .filter(({ item }) => isProductionKdsItem(item))
       .map(({ item, key }) => [key, kdsItemFingerprint(item)])
   );
 
   return nextOrder.items
     .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
-    .filter(({ item }) => isDispatchableKdsItem(item))
+    .filter(({ item }) => isProductionKdsItem(item))
     .filter(({ item, key }) => previousItems.has(key) && previousItems.get(key) !== kdsItemFingerprint(item))
     .map(({ key }) => key);
 }
@@ -820,7 +820,7 @@ function reconcileKdsReadyOrder(order, previousOrder = null) {
   }
 
   const readyOrder = readyOrders[readyIndex];
-  const productionKeys = new Set(dispatchableItemKeys(order));
+  const productionKeys = new Set(productionItemKeys(order));
   const changedItems = new Set(changedProductionItemKeys(previousOrder, order));
   const readyItems = (readyOrder.readyItems || [])
     .filter((key) => productionKeys.has(key))
@@ -873,7 +873,7 @@ async function saveKdsReadyItems(target, source) {
 
   targetKeys.forEach((key) => readyItems.add(String(key || "")));
 
-  const allKdsKeys = dispatchableItemKeys(order);
+  const allKdsKeys = productionItemKeys(order);
   const isOrderReady =
     allKdsKeys.length > 0 &&
     allKdsKeys.every((key) => readyItems.has(key));
@@ -3156,7 +3156,7 @@ function buildKdsDebug() {
 }
 
 function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
-  const productionKeys = dispatchableItemKeys(order);
+  const productionKeys = productionItemKeys(order);
 
   if (productionKeys.length === 0) {
     return {
