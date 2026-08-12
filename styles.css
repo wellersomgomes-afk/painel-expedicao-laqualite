@@ -1,15 +1,23 @@
 :root {
   color-scheme: dark;
-  --bg: #101318;
-  --panel: #191e25;
-  --panel-strong: #212832;
-  --line: #313946;
-  --text: #f5f7fa;
-  --muted: #aab3c0;
-  --ok: #41d18d;
-  --warning: #ffcf5a;
-  --late: #ff5c5c;
+  --bg: #0b1018;
+  --panel: #151a24;
+  --panel-strong: #1d2532;
+  --panel-soft: #111824;
+  --line: #2b3546;
+  --line-strong: #3d4a5f;
+  --text: #f7f9fc;
+  --muted: #b3bfd0;
+  --muted-soft: #8290a3;
+  --ok: #35d08a;
+  --warning: #ffbd3f;
+  --late: #ff565d;
   --critical: #ff2f2f;
+  --accent: #ff8a3d;
+  --accent-strong: #ff6f35;
+  --accent-blue: #69a7ff;
+  --shadow-soft: 0 16px 34px rgba(0, 0, 0, 0.22);
+  --shadow-card: 0 10px 26px rgba(0, 0, 0, 0.22);
 }
 
 * {
@@ -21,7 +29,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
 }
 
 button,
@@ -64,10 +72,11 @@ h1 {
   display: flex;
   flex: 1;
   gap: 10px;
-  padding: 6px;
+  padding: 7px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .tab {
@@ -75,7 +84,7 @@ h1 {
   min-width: 0;
   min-height: 54px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -87,6 +96,7 @@ h1 {
 .tab.active {
   background: var(--text);
   color: #101318;
+  box-shadow: 0 8px 18px rgba(247, 249, 252, 0.08);
 }
 
 .config-menu {
@@ -109,9 +119,9 @@ h1 {
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--panel-strong);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-soft);
 }
 
 .config-options[hidden] {
@@ -131,7 +141,7 @@ h1 {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font-size: 22px;
@@ -153,8 +163,9 @@ h1 {
   min-height: 86px;
   padding: 18px 24px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--panel);
+  box-shadow: var(--shadow-card);
 }
 
 .summary-item span {
@@ -646,9 +657,9 @@ h1 {
   z-index: 20;
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid #465061;
-  border-radius: 8px;
-  background: #26313e;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel-strong);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
@@ -681,7 +692,7 @@ h1 {
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   cursor: pointer;
@@ -705,6 +716,7 @@ h1 {
 .kds-screen .summary-item {
   min-height: 50px;
   padding: 8px 14px;
+  border-radius: 10px;
 }
 
 .kds-screen .summary-item span {
@@ -723,8 +735,9 @@ h1 {
   margin-bottom: 8px;
   padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .kds-search label {
@@ -738,7 +751,7 @@ h1 {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--panel-strong);
   color: var(--text);
   font-size: 20px;
@@ -749,7 +762,7 @@ h1 {
 .kds-search button {
   min-height: 38px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--text);
   color: #101318;
   cursor: pointer;
@@ -771,6 +784,7 @@ h1 {
 .kds-settings-button {
   background: var(--text);
   color: #101318;
+  box-shadow: 0 10px 20px rgba(247, 249, 252, 0.08);
 }
 
 .kds-settings-button[aria-expanded="true"] {
@@ -786,10 +800,10 @@ h1 {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #465061;
-  border-radius: 8px;
-  background: #1b222c;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.36);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 .kds-settings-panel[hidden] {
@@ -826,8 +840,8 @@ h1 {
 .driver-form input {
   min-height: 36px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #101721;
+  border-radius: 9px;
+  background: var(--panel-soft);
   color: var(--text);
   font-size: 14px;
   font-weight: 800;
@@ -842,7 +856,7 @@ h1 {
 .driver-list-item button {
   min-height: 36px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: #eef1f5;
   color: #101318;
   cursor: pointer;
@@ -937,6 +951,7 @@ h1 {
 .kds-size-button.active {
   background: var(--text);
   color: #101318;
+  box-shadow: 0 8px 18px rgba(247, 249, 252, 0.08);
 }
 
 .kds-view-tabs,
@@ -947,8 +962,9 @@ h1 {
   margin-bottom: 8px;
   padding: 4px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .kds-screen > .kds-product-tabs,
@@ -993,7 +1009,7 @@ h1 {
 .kds-service-tab {
   min-height: 38px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -1006,6 +1022,7 @@ h1 {
 .kds-service-tab.active {
   background: var(--text);
   color: #101318;
+  box-shadow: 0 8px 18px rgba(247, 249, 252, 0.08);
 }
 
 .kds-grid {
@@ -1057,9 +1074,10 @@ h1 {
   justify-content: space-between;
   min-height: 48px;
   padding: 0 18px;
-  border: 1px solid #465061;
-  border-radius: 8px;
-  background: #202833;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .kds-section-head span {
@@ -1086,10 +1104,10 @@ h1 {
   min-height: 270px;
   display: grid;
   align-content: start;
-  border: 2px solid #465061;
-  border-radius: 8px;
-  background: #1d2630;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+  border: 2px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-card);
 }
 
 .kds-order-card.is-ready {
@@ -1099,24 +1117,24 @@ h1 {
 .kds-order-card.has-duplicate-customer,
 .dispatch-card.has-duplicate-customer {
   border-color: var(--warning);
-  box-shadow: 0 0 0 2px rgba(255, 207, 90, 0.5), 0 12px 24px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 0 0 2px rgba(255, 189, 63, 0.45), var(--shadow-card);
 }
 
 .dispatch-card {
   overflow: hidden;
   width: 250px;
   min-height: 250px;
-  border: 1px solid #d7dee7;
-  border-radius: 8px;
+  border: 1px solid #dce3ec;
+  border-radius: 12px;
   background: #ffffff;
-  color: #30455b;
+  color: #263a50;
   font-family: "Segoe UI", Arial, Helvetica, sans-serif;
-  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.14);
+  box-shadow: 0 14px 30px rgba(5, 10, 18, 0.18);
 }
 
 .dispatch-card.is-selected {
-  border-color: #2f80ed;
-  box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.35), 0 1px 4px rgba(16, 24, 40, 0.14);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(105, 167, 255, 0.35), 0 14px 30px rgba(5, 10, 18, 0.2);
 }
 
 .dispatch-card-head {
@@ -1126,8 +1144,8 @@ h1 {
   gap: 8px;
   min-height: 56px;
   padding: 10px 12px;
-  background: #d5f7df;
-  color: #073f28;
+  background: #d8f8e3;
+  color: #063d27;
 }
 
 .dispatch-head-actions {
@@ -1140,7 +1158,7 @@ h1 {
   min-height: 28px;
   padding: 5px 7px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 7px;
   background: #ffffff;
   color: #073f28;
   cursor: pointer;
@@ -1149,7 +1167,7 @@ h1 {
 }
 
 .dispatch-select-button[aria-pressed="true"] {
-  background: #2f80ed;
+  background: var(--accent-blue);
   color: #ffffff;
 }
 
@@ -1165,9 +1183,10 @@ h1 {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #465061;
-  border-radius: 8px;
-  background: #202833;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-card);
 }
 
 .bulk-dispatch-bar > div:first-child {
@@ -1198,7 +1217,7 @@ h1 {
   min-height: 38px;
   padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: #eef1f5;
   color: #101318;
   cursor: pointer;
@@ -1207,7 +1226,7 @@ h1 {
 }
 
 .bulk-dispatch-actions .bulk-dispatch-button {
-  background: #78a2f8;
+  background: var(--accent-blue);
 }
 
 .bulk-dispatch-actions button:disabled {
@@ -1230,10 +1249,10 @@ h1 {
   display: grid;
   gap: 14px;
   padding: 16px;
-  border: 1px solid #465061;
-  border-radius: 10px;
-  background: #1b222c;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 .driver-modal header {
@@ -1253,7 +1272,7 @@ h1 {
   width: 34px;
   height: 34px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: #eef1f5;
   color: #101318;
   cursor: pointer;
@@ -1277,8 +1296,8 @@ h1 {
   min-height: 46px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #101721;
+  border-radius: 9px;
+  background: var(--panel-soft);
   color: var(--text);
   font-size: 16px;
   font-weight: 900;
@@ -1293,7 +1312,7 @@ h1 {
 .driver-modal-actions button {
   min-height: 44px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   cursor: pointer;
   font-size: 15px;
   font-weight: 900;
@@ -1305,7 +1324,7 @@ h1 {
 }
 
 .driver-modal-confirm {
-  background: #78a2f8;
+  background: var(--accent-blue);
   color: #101318;
 }
 
@@ -1328,7 +1347,7 @@ h1 {
 .dispatch-time {
   flex: 0 0 auto;
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: 7px;
   background: #ff333b;
   color: #ffffff;
   font-size: 13px;
@@ -1343,7 +1362,7 @@ h1 {
   width: calc(100% - 20px);
   min-height: 34px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 8px;
   background: #f4f6f8;
   color: #101318;
   cursor: pointer;
@@ -1354,6 +1373,7 @@ h1 {
 
 .dispatch-top-action:hover {
   background: #e8edf3;
+  box-shadow: inset 0 0 0 1px #d7dee7;
 }
 
 .dispatch-items {
@@ -1376,7 +1396,7 @@ h1 {
 
 .dispatch-item-line strong,
 .dispatch-item-line span {
-  color: #30455b;
+  color: #263a50;
   font-size: 13px;
   font-weight: 800;
   line-height: 1.25;
@@ -1486,7 +1506,7 @@ h1 {
   min-height: 46px;
   margin: 0 14px 14px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--ok);
   color: #101318;
   cursor: pointer;
@@ -1499,7 +1519,7 @@ h1 {
   min-height: 34px;
   margin: 0 10px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #eef1f5;
   color: #101318;
   cursor: pointer;
