@@ -771,14 +771,6 @@ function isDispatchableKdsItem(item) {
   return DISPATCHABLE_KDS_SECTORS.has(classification.key);
 }
 
-function hasInactiveProductionItems(order) {
-  return (order.items || []).some((item) => {
-    const classification = classifyProductionItem(item);
-
-    return DISPATCHABLE_KDS_SECTORS.has(classification.key) && !ACTIVE_PRODUCTION_KDS_SECTORS.has(classification.key);
-  });
-}
-
 function productionItemKeys(order) {
   return (order.items || [])
     .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
@@ -786,8 +778,15 @@ function productionItemKeys(order) {
     .map(({ key }) => key);
 }
 
+function dispatchableItemKeys(order) {
+  return (order.items || [])
+    .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
+    .filter(({ item }) => isDispatchableKdsItem(item))
+    .map(({ key }) => key);
+}
+
 function isKdsOrderComplete(order, readyOrder) {
-  const productionKeys = productionItemKeys(order);
+  const productionKeys = dispatchableItemKeys(order);
   const readyItems = new Set(readyOrder?.readyItems || []);
 
   return productionKeys.length > 0 && productionKeys.every((key) => readyItems.has(key));
@@ -801,13 +800,13 @@ function changedProductionItemKeys(previousOrder, nextOrder) {
   const previousItems = new Map(
     previousOrder.items
       .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
-      .filter(({ item }) => isProductionKdsItem(item))
+      .filter(({ item }) => isDispatchableKdsItem(item))
       .map(({ item, key }) => [key, kdsItemFingerprint(item)])
   );
 
   return nextOrder.items
     .map((item, index) => ({ item, key: kdsItemKey(item, index) }))
-    .filter(({ item }) => isProductionKdsItem(item))
+    .filter(({ item }) => isDispatchableKdsItem(item))
     .filter(({ item, key }) => previousItems.has(key) && previousItems.get(key) !== kdsItemFingerprint(item))
     .map(({ key }) => key);
 }
@@ -821,7 +820,7 @@ function reconcileKdsReadyOrder(order, previousOrder = null) {
   }
 
   const readyOrder = readyOrders[readyIndex];
-  const productionKeys = new Set(productionItemKeys(order));
+  const productionKeys = new Set(dispatchableItemKeys(order));
   const changedItems = new Set(changedProductionItemKeys(previousOrder, order));
   const readyItems = (readyOrder.readyItems || [])
     .filter((key) => productionKeys.has(key))
@@ -874,14 +873,13 @@ async function saveKdsReadyItems(target, source) {
 
   targetKeys.forEach((key) => readyItems.add(String(key || "")));
 
-  const pendingProductionKeys = productionItemKeys(order);
+  const allKdsKeys = dispatchableItemKeys(order);
   const isOrderReady =
-    pendingProductionKeys.length > 0 &&
-    !hasInactiveProductionItems(order) &&
-    pendingProductionKeys.every((key) => readyItems.has(key));
+    allKdsKeys.length > 0 &&
+    allKdsKeys.every((key) => readyItems.has(key));
   const nextReady = {
     ...currentReady,
-    readyItems: [...readyItems].filter((key) => pendingProductionKeys.includes(key)),
+    readyItems: [...readyItems].filter((key) => allKdsKeys.includes(key)),
     readyAt: isOrderReady ? Date.now() : null,
   };
 
@@ -919,17 +917,23 @@ async function markKdsItemReady(target) {
 
 function markKdsOrderReadyFromCardapio(order) {
   const productionKeys = productionItemKeys(order);
+  const allKdsKeys = dispatchableItemKeys(order);
+  const externalReadyKeys = allKdsKeys.filter((key) => !productionKeys.includes(key));
+  const keysFromCardapio = externalReadyKeys.length > 0 ? externalReadyKeys : allKdsKeys;
 
   const readyOrders = readKdsReadyOrders();
   const readyIndex = readyOrders.findIndex((item) => isSameOrder(item, order));
   const currentReady = readyIndex >= 0 ? readyOrders[readyIndex] : {};
+  const readyItems = new Set(currentReady.readyItems || []);
+  keysFromCardapio.forEach((key) => readyItems.add(key));
+  const isOrderReady = allKdsKeys.length > 0 && allKdsKeys.every((key) => readyItems.has(key));
   const readyOrder = {
     ...currentReady,
     number: order.number,
     orderId: order.orderId,
     customer: order.customer,
-    readyItems: productionKeys,
-    readyAt: Date.now(),
+    readyItems: [...readyItems].filter((key) => allKdsKeys.includes(key)),
+    readyAt: isOrderReady ? Date.now() : null,
   };
 
   if (readyIndex >= 0) {
@@ -940,7 +944,11 @@ function markKdsOrderReadyFromCardapio(order) {
 
   writeKdsReadyOrders(readyOrders);
 
-  return { ok: true, action: "cardapio-ready-synced", order: order.number };
+  return {
+    ok: true,
+    action: isOrderReady ? "cardapio-ready-synced" : "cardapio-partial-ready-synced",
+    order: order.number,
+  };
 }
 
 function recordDispatchedOrder(order, payload) {
@@ -3148,7 +3156,7 @@ function buildKdsDebug() {
 }
 
 function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
-  const productionKeys = productionItemKeys(order);
+  const productionKeys = dispatchableItemKeys(order);
 
   if (productionKeys.length === 0) {
     return {
