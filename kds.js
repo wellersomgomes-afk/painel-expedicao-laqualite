@@ -25,6 +25,9 @@ const driverNameInput = document.querySelector("#driver-name-input");
 const driverList = document.querySelector("#driver-list");
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const DUPLICATE_TIME_WINDOW_MINUTES = 10;
+// Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
+const ACTIVE_PRODUCTION_SECTORS = ["pizzas"];
+const DISPATCH_SECTORS = ["pizzas", "esfihas", "porcoes"];
 let drivers = [];
 let selectedDriverId = localStorage.getItem("kdsSelectedDriverId") || "";
 let cardSize = localStorage.getItem("kdsCardSize") || "normal";
@@ -42,6 +45,11 @@ if (activeView === "dispatch") {
   activeView = "ready";
   activeSector = "dispatch";
   localStorage.setItem("kdsActiveView", activeView);
+  localStorage.setItem("kdsActiveSector", activeSector);
+}
+
+if (!ACTIVE_PRODUCTION_SECTORS.includes(activeSector) && activeSector !== "dispatch") {
+  activeSector = "pizzas";
   localStorage.setItem("kdsActiveSector", activeSector);
 }
 
@@ -394,7 +402,7 @@ function isDispatchMode() {
 function filterOrderForSector(order) {
   const items = (order.items || []).filter((item) =>
     activeSector === "all"
-      ? sectorsForItem(item).some((sector) => ["pizzas", "esfihas", "porcoes"].includes(sector))
+      ? sectorsForItem(item).some((sector) => ACTIVE_PRODUCTION_SECTORS.includes(sector))
       : sectorsForItem(item).includes(activeSector)
   );
 
@@ -407,7 +415,7 @@ function filterOrderForSector(order) {
 
 function filterOrderForDispatch(order) {
   const items = (order.items || []).filter((item) =>
-    sectorsForItem(item).some((sector) => ["pizzas", "esfihas", "porcoes"].includes(sector))
+    sectorsForItem(item).some((sector) => DISPATCH_SECTORS.includes(sector))
   );
 
   if (items.length === 0) {
@@ -678,6 +686,10 @@ function applyActiveView() {
 
 function applyActiveSector() {
   productTabs.forEach((button) => {
+    const isProductionSector = button.dataset.sector !== "dispatch" && button.dataset.sector !== "all";
+    const isDisabledSector = isProductionSector && !ACTIVE_PRODUCTION_SECTORS.includes(button.dataset.sector);
+
+    button.hidden = isDisabledSector || button.dataset.sector === "all";
     button.classList.toggle("active", button.dataset.sector === activeSector);
   });
 }
@@ -1121,6 +1133,10 @@ viewTabs.forEach((button) => {
 
 productTabs.forEach((button) => {
   button.addEventListener("click", () => {
+    if (button.hidden) {
+      return;
+    }
+
     activeSector = button.dataset.sector;
     localStorage.setItem("kdsActiveSector", activeSector);
     if (activeSector === "dispatch") {

@@ -38,6 +38,9 @@ const MAX_DISPATCHED_STORED = Number(process.env.MAX_DISPATCHED_STORED) || 80;
 const MAX_READY_STORED = Number(process.env.MAX_READY_STORED) || 120;
 const MAX_UPDATE_CLIENTS = Number(process.env.MAX_UPDATE_CLIENTS) || 20;
 const UPDATE_CLIENT_TTL_MS = Number(process.env.UPDATE_CLIENT_TTL_MS) || 10 * 60 * 1000;
+// Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
+const ACTIVE_PRODUCTION_KDS_SECTORS = new Set(["pizzas"]);
+const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
@@ -759,7 +762,21 @@ function kdsItemFingerprint(item) {
 function isProductionKdsItem(item) {
   const classification = classifyProductionItem(item);
 
-  return ["pizzas", "esfihas", "porcoes"].includes(classification.key);
+  return ACTIVE_PRODUCTION_KDS_SECTORS.has(classification.key);
+}
+
+function isDispatchableKdsItem(item) {
+  const classification = classifyProductionItem(item);
+
+  return DISPATCHABLE_KDS_SECTORS.has(classification.key);
+}
+
+function hasInactiveProductionItems(order) {
+  return (order.items || []).some((item) => {
+    const classification = classifyProductionItem(item);
+
+    return DISPATCHABLE_KDS_SECTORS.has(classification.key) && !ACTIVE_PRODUCTION_KDS_SECTORS.has(classification.key);
+  });
 }
 
 function productionItemKeys(order) {
@@ -858,7 +875,10 @@ async function saveKdsReadyItems(target, source) {
   targetKeys.forEach((key) => readyItems.add(String(key || "")));
 
   const pendingProductionKeys = productionItemKeys(order);
-  const isOrderReady = pendingProductionKeys.length > 0 && pendingProductionKeys.every((key) => readyItems.has(key));
+  const isOrderReady =
+    pendingProductionKeys.length > 0 &&
+    !hasInactiveProductionItems(order) &&
+    pendingProductionKeys.every((key) => readyItems.has(key));
   const nextReady = {
     ...currentReady,
     readyItems: [...readyItems].filter((key) => pendingProductionKeys.includes(key)),
@@ -899,10 +919,6 @@ async function markKdsItemReady(target) {
 
 function markKdsOrderReadyFromCardapio(order) {
   const productionKeys = productionItemKeys(order);
-
-  if (productionKeys.length === 0) {
-    return { ok: true, action: "cardapio-ready-without-production", order: order.number };
-  }
 
   const readyOrders = readKdsReadyOrders();
   const readyIndex = readyOrders.findIndex((item) => isSameOrder(item, order));
@@ -3096,7 +3112,7 @@ function buildKdsReadyOrders() {
         fulfillmentType: order.fulfillmentType,
         neighborhood: order.neighborhood,
         arrivedAt: order.arrivedAt,
-        readyAt: isKdsOrderComplete(order, readyOrder) ? readyOrder.readyAt : null,
+        readyAt: readyOrder.readyAt || null,
         notes: order.notes || "",
         items: order.items
           .map((item, index) => ({
@@ -3104,8 +3120,8 @@ function buildKdsReadyOrders() {
             kdsItemKey: kdsItemKey(item, index),
             notes: item.notes || extractNoteText(item),
           }))
-          .filter((item) => isProductionKdsItem(item))
-          .filter((item) => isKdsOrderComplete(order, readyOrder) || (readyOrder.readyItems || []).includes(item.kdsItemKey)),
+          .filter((item) => isDispatchableKdsItem(item))
+          .filter((item) => readyOrder.readyAt || (readyOrder.readyItems || []).includes(item.kdsItemKey)),
       };
     })
     .filter(Boolean)
