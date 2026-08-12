@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.RENDER ? "0.0.0.0" : "localhost";
@@ -41,6 +42,11 @@ const UPDATE_CLIENT_TTL_MS = Number(process.env.UPDATE_CLIENT_TTL_MS) || 10 * 60
 // Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
 const ACTIVE_PRODUCTION_KDS_SECTORS = new Set(["pizzas"]);
 const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
+const PANEL_PASSWORD = process.env.PANEL_PASSWORD || "qualidade123";
+const PANEL_SESSION_SECRET =
+  process.env.PANEL_SESSION_SECRET || CARDAPIO_CLIENT_SECRET || PANEL_PASSWORD;
+const PANEL_AUTH_COOKIE = "laqualite_auth";
+const PANEL_AUTH_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
@@ -1180,6 +1186,216 @@ function recordSystemEvent(body, result) {
 function sendJson(response, statusCode, data) {
   response.writeHead(statusCode, { "Content-Type": contentTypes[".json"] });
   response.end(JSON.stringify(data));
+}
+
+function parseCookies(request) {
+  return String(request.headers.cookie || "")
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .reduce((cookies, item) => {
+      const separatorIndex = item.indexOf("=");
+
+      if (separatorIndex < 0) {
+        return cookies;
+      }
+
+      cookies[item.slice(0, separatorIndex)] = decodeURIComponent(item.slice(separatorIndex + 1));
+      return cookies;
+    }, {});
+}
+
+function panelAuthToken() {
+  return crypto
+    .createHmac("sha256", PANEL_SESSION_SECRET)
+    .update(PANEL_PASSWORD)
+    .digest("hex");
+}
+
+function isPanelAuthenticated(request) {
+  return parseCookies(request)[PANEL_AUTH_COOKIE] === panelAuthToken();
+}
+
+function panelAuthCookie(value, request) {
+  const secure = process.env.RENDER || request.headers["x-forwarded-proto"] === "https";
+  const parts = [
+    `${PANEL_AUTH_COOKIE}=${encodeURIComponent(value)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${PANEL_AUTH_MAX_AGE_SECONDS}`,
+  ];
+
+  if (secure) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
+}
+
+function clearPanelAuthCookie(request) {
+  return panelAuthCookie("", request).replace(`Max-Age=${PANEL_AUTH_MAX_AGE_SECONDS}`, "Max-Age=0");
+}
+
+function isPublicRoute(request, url) {
+  return (
+    url.pathname === "/login" ||
+    url.pathname === "/api/login" ||
+    url.pathname === "/favicon.ico" ||
+    url.pathname === "/api/webhook/cardapio-web"
+  );
+}
+
+function serveLoginPage(response, { invalid = false } = {}) {
+  response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  response.end(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acesso La Qualite</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #0b1018;
+        color: #f7f9fc;
+        font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      }
+      form {
+        width: min(420px, 100%);
+        display: grid;
+        gap: 14px;
+        padding: 28px;
+        border: 1px solid #2b3546;
+        border-radius: 16px;
+        background: #151a24;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+      }
+      span {
+        color: #b3bfd0;
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.05;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+      }
+      input {
+        width: 100%;
+        min-height: 48px;
+        padding: 0 14px;
+        border: 1px solid #3d4a5f;
+        border-radius: 10px;
+        background: #111824;
+        color: #f7f9fc;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 800;
+      }
+      button {
+        min-height: 48px;
+        border: 0;
+        border-radius: 10px;
+        background: #f7f9fc;
+        color: #101318;
+        cursor: pointer;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 900;
+      }
+      p {
+        min-height: 20px;
+        margin: 0;
+        color: #ff565d;
+        font-size: 14px;
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="login-form">
+      <div>
+        <span>La Qualite Delivery</span>
+        <h1>Acesso ao painel</h1>
+      </div>
+      <label>
+        <span>Senha</span>
+        <input id="password" type="password" autocomplete="current-password" autofocus />
+      </label>
+      <button type="submit">Entrar</button>
+      <p id="message">${invalid ? "Senha incorreta." : ""}</p>
+    </form>
+    <script>
+      const form = document.querySelector("#login-form");
+      const password = document.querySelector("#password");
+      const message = document.querySelector("#message");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        message.textContent = "";
+
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: password.value }),
+        });
+
+        if (response.ok) {
+          window.location.href = "/";
+          return;
+        }
+
+        message.textContent = "Senha incorreta.";
+        password.select();
+      });
+    </script>
+  </body>
+</html>`);
+}
+
+async function handleLogin(request, response) {
+  try {
+    const body = await readBody(request);
+
+    if (String(body.password || "") !== PANEL_PASSWORD) {
+      sendJson(response, 401, { ok: false, message: "Senha incorreta." });
+      return;
+    }
+
+    response.writeHead(200, {
+      "Content-Type": contentTypes[".json"],
+      "Set-Cookie": panelAuthCookie(panelAuthToken(), request),
+    });
+    response.end(JSON.stringify({ ok: true }));
+  } catch (error) {
+    sendJson(response, 400, { ok: false, message: "Login invalido." });
+  }
+}
+
+function requirePanelAuth(request, response, url) {
+  if (isPublicRoute(request, url) || isPanelAuthenticated(request)) {
+    return true;
+  }
+
+  if (url.pathname.startsWith("/api/")) {
+    sendJson(response, 401, { ok: false, message: "Acesso protegido por senha." });
+    return false;
+  }
+
+  serveLoginPage(response);
+  return false;
 }
 
 function memorySnapshot() {
@@ -3516,6 +3732,35 @@ function serveStatic(request, response) {
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
+
+  if (request.method === "GET" && url.pathname === "/login") {
+    if (isPanelAuthenticated(request)) {
+      response.writeHead(302, { Location: "/" });
+      response.end();
+      return;
+    }
+
+    serveLoginPage(response);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/login") {
+    await handleLogin(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/logout") {
+    response.writeHead(200, {
+      "Content-Type": contentTypes[".json"],
+      "Set-Cookie": clearPanelAuthCookie(request),
+    });
+    response.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (!requirePanelAuth(request, response, url)) {
+    return;
+  }
 
   if (
     !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
