@@ -55,6 +55,8 @@ const configOptions = document.querySelector("#config-options");
 const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
 const fullscreenButton = document.querySelector("#fullscreen-button");
+const footerUpdated = document.querySelector("#footer-updated");
+const footerRefresh = document.querySelector("#footer-refresh");
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const DUPLICATE_TIME_WINDOW_MINUTES = 10;
 
@@ -284,6 +286,13 @@ function renderOrders() {
 
   totalCount.textContent = String(activeOrders.length);
   lateCount.textContent = String(lateOrders.length);
+  if (footerUpdated) {
+    footerUpdated.textContent = new Date().toLocaleTimeString("pt-BR", {
+      timeZone: APP_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
   limitInput.value = String(lateLimitMinutes);
   limitLabel.textContent = String(lateLimitMinutes);
   ordersPanel.hidden = isSettingsOpen || isEventsOpen || isMonitorOpen || isDispatchedOpen;
@@ -330,6 +339,7 @@ function renderOrders() {
 
       return `
         <article class="order-row priority-${status.className}${isDuplicate ? " has-duplicate-customer" : ""}">
+          <div class="row-index">#</div>
           <div class="order-number">#${order.number}</div>
           <div class="service-badge ${isPickup(order) ? "pickup" : "delivery"}">${orderTypeLabel(order)}</div>
           <div class="order-info">
@@ -374,6 +384,7 @@ function renderDispatchedOrders() {
   dispatchedList.innerHTML = dispatchedOrders
     .map((order) => `
       <article class="order-row dispatched-row">
+        <div class="row-index">#</div>
         <div class="order-number">#${order.number}</div>
         <div class="service-badge ${isPickup(order) ? "pickup" : "delivery"}">${orderTypeLabel(order)}</div>
         <div class="order-info">
@@ -750,6 +761,19 @@ if (monitorClearTests) {
 
 if (monitorClearDispatched) {
   monitorClearDispatched.addEventListener("click", clearDispatchedNow);
+}
+
+if (footerRefresh) {
+  footerRefresh.addEventListener("click", () => {
+    loadOrders();
+    loadDispatchedOrders();
+    if (activeFilter === "events") {
+      loadEvents();
+    }
+    if (activeFilter === "monitor") {
+      loadHealth();
+    }
+  });
 }
 
 limitInput.addEventListener("input", () => {

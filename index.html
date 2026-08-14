@@ -3,49 +3,83 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Painel de Expedição Lá Qualité Delivery</title>
+    <title>Painel de Expedicao La Qualite Delivery</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="screen">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Lá Qualité Delivery</p>
-          <h1>Painel de Expedição</h1>
+    <main class="screen expedition-shell">
+      <header class="topbar expedition-topbar">
+        <div class="brand">
+          <div class="brand-mark">La</div>
+          <div>
+            <p class="eyebrow">La Qualite Delivery</p>
+            <h1>Painel de Expedicao</h1>
+          </div>
         </div>
 
         <nav class="tabs" aria-label="Filtro de pedidos">
-          <button class="tab active" type="button" data-filter="all">Todos</button>
-          <button class="tab" type="button" data-filter="delivery">Entregas</button>
-          <button class="tab" type="button" data-filter="pickup">Retirada</button>
-          <button class="tab" type="button" data-filter="late">Atrasados</button>
-          <button class="tab" type="button" data-filter="dispatched">Despachados</button>
+          <button class="tab active" type="button" data-filter="all">
+            <span class="tab-icon">#</span>
+            Todos
+          </button>
+          <button class="tab" type="button" data-filter="delivery">
+            <span class="tab-icon">E</span>
+            Entregas
+          </button>
+          <button class="tab" type="button" data-filter="pickup">
+            <span class="tab-icon">R</span>
+            Retirada
+          </button>
+          <button class="tab" type="button" data-filter="late">
+            <span class="tab-icon">!</span>
+            Atrasados
+          </button>
+          <button class="tab" type="button" data-filter="dispatched">
+            <span class="tab-icon">✓</span>
+            Despachados
+          </button>
           <div class="config-menu">
-            <button class="tab config-toggle" id="config-toggle" type="button" aria-expanded="false">Configurações</button>
+            <button class="tab config-toggle" id="config-toggle" type="button" aria-expanded="false">
+              <span class="tab-icon">*</span>
+              Configuracoes
+            </button>
             <div class="config-options" id="config-options" hidden>
               <button class="tab config-option" type="button" data-filter="settings">Tempo</button>
               <button class="tab config-option" type="button" data-filter="monitor">Monitoramento</button>
               <button class="tab config-option" type="button" data-filter="events">Eventos</button>
             </div>
           </div>
-          <button class="tab fullscreen-tab" id="fullscreen-button" type="button">Tela cheia</button>
+          <button class="tab fullscreen-tab" id="fullscreen-button" type="button">
+            <span class="tab-icon">[]</span>
+            Tela cheia
+          </button>
         </nav>
       </header>
 
       <section class="summary" aria-label="Resumo dos pedidos">
         <div class="summary-item">
-          <span>Pedidos na loja</span>
-          <strong id="total-count">0</strong>
+          <div class="summary-icon">P</div>
+          <div class="summary-copy">
+            <span>Pedidos na loja</span>
+            <strong id="total-count">0</strong>
+            <small>Aguardando preparo e despacho</small>
+          </div>
+          <div class="summary-art store-art"></div>
         </div>
         <div class="summary-item danger">
-          <span>Atrasados</span>
-          <strong id="late-count">0</strong>
+          <div class="summary-icon">T</div>
+          <div class="summary-copy">
+            <span>Atrasados</span>
+            <strong id="late-count">0</strong>
+            <small>Pedidos com atraso no tempo estimado</small>
+          </div>
+          <div class="summary-art clock-art"></div>
         </div>
       </section>
 
-      <section class="settings-panel" id="settings-panel" aria-label="Tempo de saída da loja" hidden>
+      <section class="settings-panel" id="settings-panel" aria-label="Tempo de saida da loja" hidden>
         <div class="settings-copy">
-          <span>Tempo de saída da loja</span>
+          <span>Tempo de saida da loja</span>
           <strong><span id="limit-label">30</span> minutos</strong>
         </div>
 
@@ -101,26 +135,26 @@
             <strong id="monitor-dispatched">0</strong>
           </article>
           <article class="monitor-card" id="monitor-actions-card">
-            <span>Ações pendentes</span>
+            <span>Acoes pendentes</span>
             <strong id="monitor-pending-actions">0</strong>
           </article>
           <article class="monitor-card" id="monitor-writes-card">
-            <span>Gravações pendentes</span>
+            <span>Gravacoes pendentes</span>
             <strong id="monitor-pending-writes">0</strong>
           </article>
         </div>
 
         <div class="monitor-details">
           <article>
-            <span>Última atualização</span>
+            <span>Ultima atualizacao</span>
             <strong id="monitor-updated">--</strong>
           </article>
           <article>
-            <span>Último erro</span>
+            <span>Ultimo erro</span>
             <strong id="monitor-error">Nenhum erro</strong>
           </article>
           <article>
-            <span>Último evento</span>
+            <span>Ultimo evento</span>
             <strong id="monitor-last-event">--</strong>
           </article>
         </div>
@@ -128,7 +162,7 @@
 
       <section class="events-panel" id="events-panel" aria-label="Eventos recebidos" hidden>
         <div class="events-head">
-          <span>Últimos eventos recebidos do Cardápio Web</span>
+          <span>Ultimos eventos recebidos do Cardapio Web</span>
           <strong id="events-count">0</strong>
         </div>
         <div class="events-list" id="events-list"></div>
@@ -136,6 +170,7 @@
 
       <section class="orders" id="dispatched-panel" aria-label="Pedidos despachados" hidden>
         <div class="orders-head dispatched-head">
+          <span>#</span>
           <span>Pedido</span>
           <span>Tipo</span>
           <span>Cliente</span>
@@ -149,6 +184,7 @@
 
       <section class="orders" id="orders-panel" aria-label="Lista de pedidos">
         <div class="orders-head">
+          <span>#</span>
           <span>Pedido</span>
           <span>Tipo</span>
           <span>Cliente</span>
@@ -160,6 +196,18 @@
 
         <div class="order-list" id="order-list"></div>
       </section>
+
+      <footer class="panel-footer">
+        <div>
+          <span class="status-dot"></span>
+          <strong>Sistema online</strong>
+        </div>
+        <div>
+          <span>Ultima atualizacao:</span>
+          <strong id="footer-updated">agora ha pouco</strong>
+        </div>
+        <button id="footer-refresh" type="button">Atualizar</button>
+      </footer>
     </main>
 
     <script src="./app.js"></script>
