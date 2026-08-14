@@ -23,8 +23,11 @@ const eventsPanel = document.querySelector("#events-panel");
 const monitorPanel = document.querySelector("#monitor-panel");
 const totalCount = document.querySelector("#total-count");
 const lateCount = document.querySelector("#late-count");
+const preparingLabel = document.querySelector("#preparing-label");
 const preparingCount = document.querySelector("#preparing-count");
+const dispatchedLabel = document.querySelector("#dispatched-label");
 const dispatchedCount = document.querySelector("#dispatched-count");
+const grandTotalLabel = document.querySelector("#grand-total-label");
 const grandTotalCount = document.querySelector("#grand-total-count");
 const eventsCount = document.querySelector("#events-count");
 const eventsList = document.querySelector("#events-list");
@@ -204,6 +207,61 @@ function kdsStatusFor(order) {
   return { label: `${label}${progress}`, state };
 }
 
+function metricContextForFilter() {
+  if (activeFilter === "delivery") {
+    return {
+      activeFilter: isDelivery,
+      dispatchedFilter: isDelivery,
+      preparingLabel: "Entregas em preparo",
+      dispatchedLabel: "Entregas despachadas",
+      totalLabel: "Total de entregas",
+    };
+  }
+
+  if (activeFilter === "pickup") {
+    return {
+      activeFilter: isPickup,
+      dispatchedFilter: isPickup,
+      preparingLabel: "Retiradas em preparo",
+      dispatchedLabel: "Retiradas prontas",
+      totalLabel: "Total de retiradas",
+    };
+  }
+
+  return {
+    activeFilter: () => true,
+    dispatchedFilter: () => true,
+    preparingLabel: "Pedidos em preparo",
+    dispatchedLabel: "Pedidos despachados",
+    totalLabel: "Total de pedidos",
+  };
+}
+
+function updateMetricsBar(activeOrders) {
+  const context = metricContextForFilter();
+  const preparingTotal = activeOrders.filter(context.activeFilter).length;
+  const dispatchedTotal = dispatchedOrders.filter(context.dispatchedFilter).length;
+
+  if (preparingLabel) {
+    preparingLabel.textContent = context.preparingLabel;
+  }
+  if (dispatchedLabel) {
+    dispatchedLabel.textContent = context.dispatchedLabel;
+  }
+  if (grandTotalLabel) {
+    grandTotalLabel.textContent = context.totalLabel;
+  }
+  if (preparingCount) {
+    preparingCount.textContent = String(preparingTotal);
+  }
+  if (dispatchedCount) {
+    dispatchedCount.textContent = String(dispatchedTotal);
+  }
+  if (grandTotalCount) {
+    grandTotalCount.textContent = String(preparingTotal + dispatchedTotal);
+  }
+}
+
 function updateFullscreenButton() {
   if (!fullscreenButton) {
     return;
@@ -246,15 +304,7 @@ function renderOrders() {
 
   totalCount.textContent = String(activeOrders.length);
   lateCount.textContent = String(lateOrders.length);
-  if (preparingCount) {
-    preparingCount.textContent = String(activeOrders.length);
-  }
-  if (dispatchedCount) {
-    dispatchedCount.textContent = String(dispatchedOrders.length);
-  }
-  if (grandTotalCount) {
-    grandTotalCount.textContent = String(activeOrders.length + dispatchedOrders.length);
-  }
+  updateMetricsBar(activeOrders);
   if (footerUpdated) {
     footerUpdated.textContent = new Date().toLocaleTimeString("pt-BR", {
       timeZone: APP_TIME_ZONE,
