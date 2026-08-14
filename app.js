@@ -220,8 +220,9 @@ function metricContextForFilter() {
 
   if (activeFilter === "pickup") {
     return {
-      activeFilter: isPickup,
+      activeFilter: (order) => isPickup(order) && !isPickupReady(order),
       dispatchedFilter: isPickup,
+      readyActiveFilter: isPickupReady,
       preparingLabel: "Retiradas em preparo",
       dispatchedLabel: "Retiradas prontas",
       totalLabel: "Total de retiradas",
@@ -229,8 +230,9 @@ function metricContextForFilter() {
   }
 
   return {
-    activeFilter: () => true,
+    activeFilter: (order) => !isPickupReady(order),
     dispatchedFilter: () => true,
+    readyActiveFilter: isPickupReady,
     preparingLabel: "Pedidos em preparo",
     dispatchedLabel: "Pedidos despachados",
     totalLabel: "Total de pedidos",
@@ -240,7 +242,10 @@ function metricContextForFilter() {
 function updateMetricsBar(activeOrders) {
   const context = metricContextForFilter();
   const preparingTotal = activeOrders.filter(context.activeFilter).length;
-  const dispatchedTotal = dispatchedOrders.filter(context.dispatchedFilter).length;
+  const readyActiveTotal = context.readyActiveFilter
+    ? activeOrders.filter(context.readyActiveFilter).length
+    : 0;
+  const dispatchedTotal = dispatchedOrders.filter(context.dispatchedFilter).length + readyActiveTotal;
 
   if (preparingLabel) {
     preparingLabel.textContent = context.preparingLabel;
