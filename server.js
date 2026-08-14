@@ -3382,6 +3382,15 @@ function buildKdsDebug() {
 }
 
 function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
+  if (order.externalReadyAt) {
+    return {
+      label: "Pronto",
+      state: "ready",
+      readyCount: 1,
+      totalCount: 1,
+    };
+  }
+
   if (!ENABLE_KDS) {
     return {
       label: "Em preparo",
@@ -3545,7 +3554,7 @@ function removalEventKind(payload, normalizedOrder) {
 function isProductionReadyEvent(payload, normalizedOrder) {
   const eventType = String(payload.eventType || "").toUpperCase();
 
-  if (["READY", "ORDER_READY", "PRODUCTION_READY", "PREPARED", "PRONTO"].includes(eventType)) {
+  if (["READY", "ORDER_READY", "PRODUCTION_READY", "PREPARED", "PRONTO", "READY_FOR_PICKUP", "WAITING_TO_CATCH"].includes(eventType)) {
     return true;
   }
 
@@ -3602,6 +3611,8 @@ function isProductionReadyEvent(payload, normalizedOrder) {
     "ready_for_pickup",
     "ready for pickup",
     "waiting_to_catch",
+    "waiting to catch",
+    "esperando retirada",
     "prepared",
     "ready",
     "pronto",
@@ -3697,22 +3708,31 @@ async function handleWebhook(payload) {
   }
 
   const previousOrder = currentIndex >= 0 ? orders[currentIndex] : null;
+  const readyFromCardapio = isProductionReadyEvent({ ...payload, ...payloadForOrder }, activeOrder);
+  const nextActiveOrder = {
+    ...activeOrder,
+    externalReadyAt: readyFromCardapio
+      ? previousOrder?.externalReadyAt || Date.now()
+      : previousOrder?.externalReadyAt || activeOrder.externalReadyAt || null,
+  };
 
   if (currentIndex >= 0) {
-    orders[currentIndex] = { ...orders[currentIndex], ...activeOrder };
+    orders[currentIndex] = { ...orders[currentIndex], ...nextActiveOrder };
   } else {
-    orders.push(activeOrder);
+    orders.push(nextActiveOrder);
   }
 
   writeOrders(orders);
   if (ENABLE_KDS) {
-    reconcileKdsReadyOrder(activeOrder, previousOrder);
+    reconcileKdsReadyOrder(nextActiveOrder, previousOrder);
   }
 
-  if (ENABLE_KDS && isProductionReadyEvent({ ...payload, ...payloadForOrder }, activeOrder)) {
-    const readyResult = markKdsOrderReadyFromCardapio(activeOrder);
+  if (readyFromCardapio) {
+    const readyResult = ENABLE_KDS
+      ? markKdsOrderReadyFromCardapio(nextActiveOrder)
+      : { ok: true, action: "cardapio-ready-synced", order: nextActiveOrder.number };
     recordSystemEvent(
-      { order: activeOrder.number, orderId: activeOrder.orderId, source: "cardapio-ready" },
+      { order: nextActiveOrder.number, orderId: nextActiveOrder.orderId, source: "cardapio-ready" },
       readyResult
     );
   }

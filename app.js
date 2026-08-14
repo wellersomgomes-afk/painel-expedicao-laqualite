@@ -82,7 +82,7 @@ function formatTimer(order) {
 }
 
 function isPickupReady(order) {
-  return isPickup(order) && order?.kdsStatus?.state === "ready";
+  return isPickup(order) && (order?.externalReadyAt || order?.kdsStatus?.state === "ready");
 }
 
 function isLate(order) {
@@ -91,7 +91,7 @@ function isLate(order) {
 
 function statusFor(order) {
   if (isPickupReady(order)) {
-    return { label: "Pronto para retirada", className: "ready" };
+    return { label: "Esperando retirada", className: "ready" };
   }
 
   const minutes = elapsedMinutes(order);
