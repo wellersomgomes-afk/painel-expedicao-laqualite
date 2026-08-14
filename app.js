@@ -58,7 +58,6 @@ const fullscreenButton = document.querySelector("#fullscreen-button");
 const footerUpdated = document.querySelector("#footer-updated");
 const footerRefresh = document.querySelector("#footer-refresh");
 const APP_TIME_ZONE = "America/Sao_Paulo";
-const DUPLICATE_TIME_WINDOW_MINUTES = 10;
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -136,10 +135,6 @@ function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
-function normalizeAddress(value) {
-  return normalizeCustomerName(value);
-}
-
 function isMeaningfulCustomerName(value) {
   const name = normalizeCustomerName(value);
   const genericNames = new Set(["cliente", "nao informado", "consumidor", "sem nome"]);
@@ -149,12 +144,6 @@ function isMeaningfulCustomerName(value) {
 
 function isMeaningfulPhone(value) {
   return normalizePhone(value).length >= 8;
-}
-
-function isMeaningfulAddress(value) {
-  const address = normalizeAddress(value);
-
-  return address.length >= 8 && !address.includes("nao informado");
 }
 
 function duplicateKeyCounts(sourceOrders, keyFactory) {
@@ -168,40 +157,6 @@ function duplicateKeyCounts(sourceOrders, keyFactory) {
   }, new Map());
 }
 
-function orderDuplicateId(order) {
-  return String(order.orderId || order.number || "");
-}
-
-function duplicateNearbyOrders(sourceOrders) {
-  const windowMs = DUPLICATE_TIME_WINDOW_MINUTES * 60000;
-  const comparableOrders = sourceOrders
-    .map((order) => ({
-      id: orderDuplicateId(order),
-      arrivedAt: Number(order.arrivedAt),
-      identities: [
-        isMeaningfulPhone(order.phone) ? normalizePhone(order.phone) : "",
-        isMeaningfulAddress(order.address) ? normalizeAddress(order.address) : "",
-        isMeaningfulCustomerName(order.customer) ? normalizeCustomerName(order.customer) : "",
-      ].filter(Boolean),
-    }))
-    .filter((order) => order.id && Number.isFinite(order.arrivedAt) && order.identities.length > 0);
-  const duplicates = new Set();
-
-  comparableOrders.forEach((order, index) => {
-    comparableOrders.slice(index + 1).forEach((otherOrder) => {
-      const isNear = Math.abs(order.arrivedAt - otherOrder.arrivedAt) <= windowMs;
-      const isSameClient = order.identities.some((identity) => otherOrder.identities.includes(identity));
-
-      if (isNear && isSameClient) {
-        duplicates.add(order.id);
-        duplicates.add(otherOrder.id);
-      }
-    });
-  });
-
-  return duplicates;
-}
-
 function duplicateSignals(sourceOrders) {
   return {
     names: duplicateKeyCounts(sourceOrders, (order) =>
@@ -210,22 +165,16 @@ function duplicateSignals(sourceOrders) {
     phones: duplicateKeyCounts(sourceOrders, (order) =>
       isMeaningfulPhone(order.phone) ? normalizePhone(order.phone) : ""
     ),
-    addresses: duplicateKeyCounts(sourceOrders, (order) =>
-      isMeaningfulAddress(order.address) ? normalizeAddress(order.address) : ""
-    ),
-    nearby: duplicateNearbyOrders(sourceOrders),
   };
 }
 
 function isPossibleDuplicate(order, signals) {
   const phone = normalizePhone(order.phone);
-  const address = normalizeAddress(order.address);
-  const id = orderDuplicateId(order);
+  const customer = normalizeCustomerName(order.customer);
 
   return (
     (isMeaningfulPhone(order.phone) && (signals.phones.get(phone) || 0) > 1) ||
-    (isMeaningfulAddress(order.address) && (signals.addresses.get(address) || 0) > 1) ||
-    (id && signals.nearby.has(id))
+    (isMeaningfulCustomerName(order.customer) && (signals.names.get(customer) || 0) > 1)
   );
 }
 
