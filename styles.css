@@ -2234,33 +2234,23 @@ body {
 .expedition-topbar {
   min-height: 78px;
   margin: 0;
-  padding: 8px 22px;
+  padding: 8px 20px;
   border-bottom: 1px solid rgba(127, 151, 180, 0.16);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-width: 310px;
+  justify-content: center;
+  min-width: 170px;
 }
 
-.brand-mark {
-  display: grid;
-  width: 56px;
-  height: 56px;
-  place-items: center;
-  border: 1px solid rgba(255, 213, 91, 0.6);
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 30% 28%, #ffd35b, transparent 24%),
-    linear-gradient(135deg, #bd111b, #f34b25 52%, #9a0617);
-  color: #ffe36d;
-  font-size: 21px;
-  font-weight: 950;
-  line-height: 1;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  box-shadow: 0 12px 28px rgba(255, 74, 45, 0.22);
+.brand-logo {
+  display: block;
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(255, 64, 33, 0.22));
 }
 
 .expedition-topbar .eyebrow {
@@ -2275,8 +2265,8 @@ body {
 
 .expedition-topbar .tabs {
   flex: 1;
-  justify-content: flex-end;
-  gap: 12px;
+  justify-content: center;
+  gap: 20px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2288,12 +2278,12 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  min-width: 124px;
-  min-height: 44px;
-  padding: 0 16px;
+  gap: 10px;
+  min-width: 118px;
+  min-height: 46px;
+  padding: 0 18px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 10px;
   color: #d7dfeb;
   font-size: 15px;
   font-weight: 900;
@@ -2307,7 +2297,7 @@ body {
 .expedition-topbar .tab.active,
 .expedition-topbar .config-toggle.active {
   border-color: rgba(143, 103, 255, 0.8);
-  background: linear-gradient(135deg, #6f43d7, #3e237e);
+  background: linear-gradient(135deg, #6f43d7, #472394);
   color: #ffffff;
   box-shadow: 0 10px 28px rgba(104, 61, 225, 0.34);
 }
@@ -2317,16 +2307,125 @@ body {
   width: 20px;
   height: 20px;
   place-items: center;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 950;
-  line-height: 1;
+  position: relative;
+  flex: 0 0 20px;
+  border: 0;
+  border-radius: 0;
   opacity: 0.9;
 }
 
-.fullscreen-tab .tab-icon {
-  font-size: 10px;
+.tab-icon::before,
+.tab-icon::after {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.icon-grid {
+  background:
+    linear-gradient(currentColor 0 0) 3px 3px / 6px 6px no-repeat,
+    linear-gradient(currentColor 0 0) 11px 3px / 6px 6px no-repeat,
+    linear-gradient(currentColor 0 0) 3px 11px / 6px 6px no-repeat,
+    linear-gradient(currentColor 0 0) 11px 11px / 6px 6px no-repeat;
+  border-radius: 4px;
+}
+
+.icon-delivery::before {
+  left: 2px;
+  bottom: 2px;
+  width: 5px;
+  height: 5px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 11px 0 0 -1px #07111d, 11px 0 0 1px currentColor;
+}
+
+.icon-delivery::after {
+  left: 5px;
+  top: 7px;
+  width: 12px;
+  height: 8px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: skewX(-22deg);
+}
+
+.icon-pickup::before {
+  left: 3px;
+  top: 7px;
+  width: 14px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+.icon-pickup::after {
+  left: 7px;
+  top: 2px;
+  width: 6px;
+  height: 8px;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.icon-late::before {
+  left: 3px;
+  top: 2px;
+  width: 14px;
+  height: 16px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: currentColor;
+}
+
+.icon-late::after {
+  left: 9px;
+  top: 7px;
+  width: 2px;
+  height: 7px;
+  background: #07111d;
+  box-shadow: 0 9px 0 #07111d;
+}
+
+.icon-dispatched::before {
+  inset: 2px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.icon-dispatched::after {
+  left: 7px;
+  top: 6px;
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.icon-config::before {
+  inset: 4px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow:
+    0 -7px 0 -3px currentColor,
+    0 7px 0 -3px currentColor,
+    -7px 0 0 -3px currentColor,
+    7px 0 0 -3px currentColor;
+}
+
+.icon-fullscreen::before {
+  inset: 3px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.icon-fullscreen::after {
+  inset: 3px;
+  border: 2px solid currentColor;
+  border-left-color: transparent;
+  border-right-color: transparent;
 }
 
 .config-menu {

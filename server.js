@@ -68,6 +68,7 @@ const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
 };
 
 const initialOrders = [];
@@ -3822,7 +3823,7 @@ const server = http.createServer(async (request, response) => {
 
   if (
     !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
-    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
+    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/logo-la-qualite.png", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
   ) {
