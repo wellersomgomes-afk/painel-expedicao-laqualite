@@ -15,29 +15,54 @@
 
         <nav class="tabs" aria-label="Filtro de pedidos">
           <button class="tab active" type="button" data-filter="all">
-            <span class="tab-icon icon-grid" aria-hidden="true"></span>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="6" height="6" rx="1.5"></rect>
+              <rect x="14" y="4" width="6" height="6" rx="1.5"></rect>
+              <rect x="4" y="14" width="6" height="6" rx="1.5"></rect>
+              <rect x="14" y="14" width="6" height="6" rx="1.5"></rect>
+            </svg>
             Todos
           </button>
           <button class="tab" type="button" data-filter="delivery">
-            <span class="tab-icon icon-delivery" aria-hidden="true"></span>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="7" cy="17" r="2"></circle>
+              <circle cx="17" cy="17" r="2"></circle>
+              <path d="M5 17h2l3-7h4l2 4h3"></path>
+              <path d="M11 10l-2-3"></path>
+              <path d="M13 10l2-3"></path>
+              <path d="M8 13h7"></path>
+            </svg>
             Entregas
           </button>
           <button class="tab" type="button" data-filter="pickup">
-            <span class="tab-icon icon-pickup" aria-hidden="true"></span>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 8h12l1 12H5L6 8Z"></path>
+              <path d="M9 8a3 3 0 0 1 6 0"></path>
+            </svg>
             Retirada
           </button>
           <button class="tab" type="button" data-filter="late">
-            <span class="tab-icon icon-late" aria-hidden="true"></span>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4 21 20H3L12 4Z"></path>
+              <path d="M12 9v5"></path>
+              <path d="M12 17h.01"></path>
+            </svg>
             Atrasados
           </button>
           <button class="tab" type="button" data-filter="dispatched">
-            <span class="tab-icon icon-dispatched" aria-hidden="true"></span>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="m8 12 3 3 5-6"></path>
+            </svg>
             Despachados
           </button>
           <div class="config-menu">
             <button class="tab config-toggle" id="config-toggle" type="button" aria-expanded="false">
-              <span class="tab-icon icon-config" aria-hidden="true"></span>
-              Configuracoes
+              <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a8 8 0 0 0 .1-1 8 8 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.8-1L15 5h-6l-.2 3a7 7 0 0 0-1.8 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0-.1 1 8 8 0 0 0 .1 1l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 1.8 1L9 23h6l.2-3a7 7 0 0 0 1.8-1l2.4 1 2-3.5L19.4 15Z"></path>
+              </svg>
+              Configurações
             </button>
             <div class="config-options" id="config-options" hidden>
               <button class="tab config-option" type="button" data-filter="settings">Tempo</button>
@@ -46,7 +71,12 @@
             </div>
           </div>
           <button class="tab fullscreen-tab" id="fullscreen-button" type="button">
-            <span class="tab-icon icon-fullscreen" aria-hidden="true"></span>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 3H3v5"></path>
+              <path d="M16 3h5v5"></path>
+              <path d="M8 21H3v-5"></path>
+              <path d="M16 21h5v-5"></path>
+            </svg>
             Tela cheia
           </button>
         </nav>
