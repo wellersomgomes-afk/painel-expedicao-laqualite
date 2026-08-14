@@ -84,7 +84,12 @@
 
       <section class="summary" aria-label="Resumo dos pedidos">
         <div class="summary-item">
-          <div class="summary-icon">P</div>
+          <div class="summary-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 8h12l1 12H5L6 8Z"></path>
+              <path d="M9 8a3 3 0 0 1 6 0"></path>
+            </svg>
+          </div>
           <div class="summary-copy">
             <span>Pedidos na loja</span>
             <strong id="total-count">0</strong>
@@ -93,7 +98,12 @@
           <div class="summary-art store-art"></div>
         </div>
         <div class="summary-item danger">
-          <div class="summary-icon">T</div>
+          <div class="summary-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="8"></circle>
+              <path d="M12 7v5l3 2"></path>
+            </svg>
+          </div>
           <div class="summary-copy">
             <span>Atrasados</span>
             <strong id="late-count">0</strong>

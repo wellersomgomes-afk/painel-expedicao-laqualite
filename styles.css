@@ -2339,23 +2339,24 @@ body {
 }
 
 .summary {
-  gap: 18px;
+  gap: 22px;
   margin: 0;
 }
 
 .summary-item {
   position: relative;
   justify-content: flex-start;
-  gap: 24px;
-  min-height: 136px;
+  gap: 26px;
+  min-height: 150px;
   overflow: hidden;
-  padding: 26px;
-  border: 1px solid rgba(123, 98, 226, 0.28);
-  border-radius: 18px;
+  padding: 30px 34px;
+  border: 1px solid rgba(123, 98, 226, 0.34);
+  border-radius: 17px;
   background:
-    linear-gradient(135deg, rgba(32, 40, 70, 0.9), rgba(13, 19, 35, 0.95)),
+    radial-gradient(circle at 88% 52%, rgba(107, 65, 219, 0.26), transparent 28%),
+    linear-gradient(135deg, rgba(25, 35, 72, 0.88), rgba(10, 17, 32, 0.97)),
     #111827;
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .summary-item::after {
@@ -2363,37 +2364,46 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 88% 50%, rgba(125, 74, 255, 0.24), transparent 30%);
+  background: linear-gradient(90deg, transparent, rgba(154, 107, 255, 0.06));
 }
 
 .summary-item.danger {
-  border-color: rgba(255, 71, 89, 0.3);
+  border-color: rgba(255, 71, 89, 0.34);
   background:
-    linear-gradient(135deg, rgba(38, 24, 37, 0.95), rgba(16, 21, 31, 0.96)),
+    radial-gradient(circle at 88% 52%, rgba(255, 52, 70, 0.2), transparent 29%),
+    linear-gradient(135deg, rgba(35, 22, 37, 0.94), rgba(15, 20, 31, 0.97)),
     #111827;
 }
 
 .summary-item.danger::after {
-  background: radial-gradient(circle at 86% 50%, rgba(255, 55, 74, 0.24), transparent 32%);
+  background: linear-gradient(90deg, transparent, rgba(255, 55, 74, 0.08));
 }
 
 .summary-icon {
   z-index: 1;
   display: grid;
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #8b4dff, #5626a6);
+  border-radius: 13px;
+  background: linear-gradient(135deg, #8f4cff, #5522a7);
   color: #ffffff;
-  font-size: 24px;
-  font-weight: 950;
-  box-shadow: 0 14px 28px rgba(100, 63, 222, 0.28);
+  box-shadow: 0 16px 30px rgba(100, 63, 222, 0.32);
+}
+
+.summary-icon svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .summary-item.danger .summary-icon {
   background: linear-gradient(135deg, #ff474f, #bd1e34);
-  box-shadow: 0 14px 28px rgba(255, 71, 89, 0.24);
+  box-shadow: 0 16px 30px rgba(255, 71, 89, 0.28);
 }
 
 .summary-copy {
@@ -2403,12 +2413,14 @@ body {
 }
 
 .summary-copy span {
-  font-size: 16px;
+  font-size: 17px;
   color: #d6deec;
 }
 
 .summary-copy strong {
-  font-size: 42px;
+  color: #ffffff;
+  font-size: 44px;
+  line-height: 0.95;
 }
 
 .summary-copy small {
@@ -2419,45 +2431,82 @@ body {
 
 .summary-art {
   position: absolute;
-  right: 34px;
-  width: 98px;
-  height: 74px;
-  border: 4px solid rgba(132, 84, 255, 0.44);
-  border-top-width: 10px;
-  border-radius: 14px 14px 8px 8px;
-  opacity: 0.75;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.72;
 }
 
 .summary-art::before,
 .summary-art::after {
   content: "";
   position: absolute;
-  border-radius: inherit;
+}
+
+.store-art {
+  width: 112px;
+  height: 86px;
+  border: 4px solid rgba(132, 84, 255, 0.48);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+.store-art::after {
+  left: -3px;
+  top: -26px;
+  width: 112px;
+  height: 31px;
+  border: 4px solid rgba(132, 84, 255, 0.48);
+  border-bottom-width: 5px;
+  border-radius: 18px 18px 9px 9px;
+  background:
+    linear-gradient(90deg, transparent 18%, rgba(132, 84, 255, 0.48) 18% 21%, transparent 21% 39%, rgba(132, 84, 255, 0.48) 39% 42%, transparent 42% 60%, rgba(132, 84, 255, 0.48) 60% 63%, transparent 63% 81%, rgba(132, 84, 255, 0.48) 81% 84%, transparent 84%);
 }
 
 .store-art::before {
-  left: 22px;
+  left: 29px;
   bottom: -4px;
-  width: 28px;
-  height: 42px;
-  border: 4px solid rgba(132, 84, 255, 0.42);
+  width: 30px;
+  height: 48px;
+  border: 4px solid rgba(132, 84, 255, 0.48);
   border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  box-shadow:
+    45px -18px 0 -15px rgba(132, 84, 255, 0.48),
+    -22px 54px 0 -19px rgba(132, 84, 255, 0.55),
+    84px 54px 0 -19px rgba(132, 84, 255, 0.55);
 }
 
 .clock-art {
-  border-width: 4px;
+  width: 92px;
+  height: 92px;
+  border: 4px solid rgba(255, 71, 89, 0.58);
   border-radius: 50%;
-  border-color: rgba(255, 71, 89, 0.52);
+  box-shadow:
+    -62px 18px 0 -42px rgba(255, 71, 89, 0.72),
+    -82px 34px 0 -43px rgba(255, 71, 89, 0.72),
+    -80px 2px 0 -43px rgba(255, 71, 89, 0.72),
+    42px 64px 0 -39px rgba(255, 71, 89, 0.5);
 }
 
 .clock-art::before {
-  left: 42px;
-  top: 18px;
+  left: 43px;
+  top: 16px;
   width: 4px;
-  height: 26px;
-  background: rgba(255, 71, 89, 0.62);
+  height: 34px;
+  background: rgba(255, 71, 89, 0.78);
   transform-origin: bottom center;
-  transform: rotate(-35deg);
+}
+
+.clock-art::after {
+  left: 45px;
+  top: 45px;
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 71, 89, 0.78);
+  transform-origin: left center;
+  transform: rotate(35deg);
 }
 
 .orders {
