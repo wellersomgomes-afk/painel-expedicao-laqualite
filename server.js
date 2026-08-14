@@ -3394,8 +3394,8 @@ function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
 
   if (productionKeys.length === 0) {
     return {
-      label: "Sem producao",
-      state: "none",
+      label: "Em preparo",
+      state: "preparing",
       readyCount: 0,
       totalCount: 0,
     };
