@@ -2342,6 +2342,55 @@ body {
   background: #111a2a;
 }
 
+.order-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 14px 18px;
+  border: 1px solid rgba(126, 151, 185, 0.16);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(16, 24, 38, 0.96), rgba(12, 18, 30, 0.98));
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+}
+
+.metric-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 58px;
+  padding: 0 18px;
+  border: 1px solid rgba(142, 163, 194, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.metric-pill span {
+  color: #c8d3e4;
+  font-size: 14px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.metric-pill strong {
+  color: #ffffff;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.metric-pill.preparing strong {
+  color: #ffd166;
+}
+
+.metric-pill.dispatched strong {
+  color: #18e08b;
+}
+
+.metric-pill.total strong {
+  color: #9b6cff;
+}
+
 .summary {
   gap: 22px;
   margin: 0;
@@ -2715,6 +2764,15 @@ body {
 
   .summary-art {
     display: none;
+  }
+
+  .order-metrics-bar {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .metric-pill {
+    min-height: 52px;
   }
 
   .orders-head {

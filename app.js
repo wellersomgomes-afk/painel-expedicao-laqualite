@@ -23,6 +23,9 @@ const eventsPanel = document.querySelector("#events-panel");
 const monitorPanel = document.querySelector("#monitor-panel");
 const totalCount = document.querySelector("#total-count");
 const lateCount = document.querySelector("#late-count");
+const preparingCount = document.querySelector("#preparing-count");
+const dispatchedCount = document.querySelector("#dispatched-count");
+const grandTotalCount = document.querySelector("#grand-total-count");
 const eventsCount = document.querySelector("#events-count");
 const eventsList = document.querySelector("#events-list");
 const monitorMainStatus = document.querySelector("#monitor-main-status");
@@ -243,6 +246,15 @@ function renderOrders() {
 
   totalCount.textContent = String(activeOrders.length);
   lateCount.textContent = String(lateOrders.length);
+  if (preparingCount) {
+    preparingCount.textContent = String(activeOrders.length);
+  }
+  if (dispatchedCount) {
+    dispatchedCount.textContent = String(dispatchedOrders.length);
+  }
+  if (grandTotalCount) {
+    grandTotalCount.textContent = String(activeOrders.length + dispatchedOrders.length);
+  }
   if (footerUpdated) {
     footerUpdated.textContent = new Date().toLocaleTimeString("pt-BR", {
       timeZone: APP_TIME_ZONE,
