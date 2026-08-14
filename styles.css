@@ -380,13 +380,15 @@ h1 {
 }
 
 .settings-copy,
-.time-control {
+.time-control,
+.sound-control {
   display: grid;
   gap: 10px;
 }
 
 .settings-copy span,
-.time-control span {
+.time-control span,
+.sound-toggle span {
   color: var(--muted);
   font-size: 22px;
   font-weight: 800;
@@ -407,6 +409,37 @@ h1 {
   font-size: 42px;
   font-weight: 900;
   padding: 8px 18px;
+}
+
+.sound-control {
+  align-self: stretch;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+}
+
+.sound-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sound-toggle input {
+  width: 24px;
+  height: 24px;
+  accent-color: #9b6cff;
+}
+
+.sound-control button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--text);
+  color: #101318;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .orders {

@@ -60,10 +60,17 @@ const configToggle = document.querySelector("#config-toggle");
 const configOptions = document.querySelector("#config-options");
 const limitInput = document.querySelector("#limit-input");
 const limitLabel = document.querySelector("#limit-label");
+const lateAlertToggle = document.querySelector("#late-alert-toggle");
+const lateAlertTest = document.querySelector("#late-alert-test");
 const fullscreenButton = document.querySelector("#fullscreen-button");
 const footerUpdated = document.querySelector("#footer-updated");
 const footerRefresh = document.querySelector("#footer-refresh");
 const APP_TIME_ZONE = "America/Sao_Paulo";
+const LATE_ALERT_SOUND_KEY = "lateAlertSoundEnabled";
+
+let lateAlertSoundEnabled = localStorage.getItem(LATE_ALERT_SOUND_KEY) !== "false";
+let lateAlertAudioContext = null;
+let previousLateOrderKeys = null;
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -93,6 +100,82 @@ function isPickupReady(order) {
 
 function isLate(order) {
   return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitMinutes;
+}
+
+function alertKeyForOrder(order) {
+  return String(order.orderId || order.number || order.arrivedAt || "");
+}
+
+function ensureLateAlertAudio() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  if (!lateAlertAudioContext) {
+    lateAlertAudioContext = new AudioContextClass();
+  }
+
+  if (lateAlertAudioContext.state === "suspended") {
+    lateAlertAudioContext.resume().catch(() => {});
+  }
+
+  return lateAlertAudioContext;
+}
+
+function playLateAlertSound() {
+  if (!lateAlertSoundEnabled) {
+    return;
+  }
+
+  const audioContext = ensureLateAlertAudio();
+
+  if (!audioContext) {
+    return;
+  }
+
+  const now = audioContext.currentTime;
+  const notes = [880, 988, 880];
+
+  notes.forEach((frequency, index) => {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const startsAt = now + index * 0.18;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, startsAt);
+    gain.gain.setValueAtTime(0.0001, startsAt);
+    gain.gain.exponentialRampToValueAtTime(0.18, startsAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.16);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start(startsAt);
+    oscillator.stop(startsAt + 0.18);
+  });
+}
+
+function syncLateAlertControl() {
+  if (lateAlertToggle) {
+    lateAlertToggle.checked = lateAlertSoundEnabled;
+  }
+}
+
+function handleLateAlerts(lateOrders) {
+  const currentLateKeys = new Set(lateOrders.map(alertKeyForOrder).filter(Boolean));
+
+  if (!previousLateOrderKeys) {
+    previousLateOrderKeys = currentLateKeys;
+    return;
+  }
+
+  const hasNewLateOrder = [...currentLateKeys].some((key) => !previousLateOrderKeys.has(key));
+  previousLateOrderKeys = currentLateKeys;
+
+  if (hasNewLateOrder) {
+    playLateAlertSound();
+  }
 }
 
 function statusFor(order) {
@@ -310,6 +393,7 @@ function renderOrders() {
   totalCount.textContent = String(activeOrders.length);
   lateCount.textContent = String(lateOrders.length);
   updateMetricsBar(activeOrders);
+  handleLateAlerts(lateOrders);
   if (footerUpdated) {
     footerUpdated.textContent = new Date().toLocaleTimeString("pt-BR", {
       timeZone: APP_TIME_ZONE,
@@ -800,6 +884,27 @@ if (footerRefresh) {
   });
 }
 
+if (lateAlertToggle) {
+  lateAlertToggle.addEventListener("change", () => {
+    lateAlertSoundEnabled = lateAlertToggle.checked;
+    localStorage.setItem(LATE_ALERT_SOUND_KEY, String(lateAlertSoundEnabled));
+    ensureLateAlertAudio();
+  });
+}
+
+if (lateAlertTest) {
+  lateAlertTest.addEventListener("click", () => {
+    lateAlertSoundEnabled = true;
+    localStorage.setItem(LATE_ALERT_SOUND_KEY, "true");
+    syncLateAlertControl();
+    playLateAlertSound();
+  });
+}
+
+["pointerdown", "keydown"].forEach((eventName) => {
+  window.addEventListener(eventName, ensureLateAlertAudio, { once: true });
+});
+
 limitInput.addEventListener("input", () => {
   const nextLimit = Number(limitInput.value);
 
@@ -814,6 +919,7 @@ limitInput.addEventListener("input", () => {
 
 loadOrders();
 updateFullscreenButton();
+syncLateAlertControl();
 loadDispatchedOrders();
 connectLiveUpdates();
 setInterval(loadOrders, 15000);

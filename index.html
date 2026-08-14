@@ -138,6 +138,14 @@
           <span>Minutos para considerar atrasado</span>
           <input id="limit-input" type="number" min="5" max="120" step="1" value="30" />
         </label>
+
+        <div class="sound-control" aria-label="Alerta sonoro de atraso">
+          <label class="sound-toggle">
+            <input id="late-alert-toggle" type="checkbox" checked />
+            <span>Som quando pedido atrasar</span>
+          </label>
+          <button id="late-alert-test" type="button">Testar som</button>
+        </div>
       </section>
 
       <section class="monitor-panel" id="monitor-panel" aria-label="Monitoramento do sistema" hidden>
