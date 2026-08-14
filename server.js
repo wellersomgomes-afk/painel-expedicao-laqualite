@@ -39,6 +39,7 @@ const MAX_DISPATCHED_STORED = Number(process.env.MAX_DISPATCHED_STORED) || 80;
 const MAX_READY_STORED = Number(process.env.MAX_READY_STORED) || 120;
 const MAX_UPDATE_CLIENTS = Number(process.env.MAX_UPDATE_CLIENTS) || 20;
 const UPDATE_CLIENT_TTL_MS = Number(process.env.UPDATE_CLIENT_TTL_MS) || 10 * 60 * 1000;
+const ENABLE_KDS = process.env.ENABLE_KDS === "true";
 // Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
 const ACTIVE_PRODUCTION_KDS_SECTORS = new Set(["pizzas"]);
 const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
@@ -206,6 +207,10 @@ function compactStorageData(key, data) {
   }
 
   if (key === storageKeyFromFile(KDS_READY_FILE)) {
+    if (!ENABLE_KDS) {
+      return [];
+    }
+
     return data.filter(shouldShowWorkdayOrder).slice(0, MAX_READY_STORED);
   }
 
@@ -2496,7 +2501,9 @@ async function syncPartnerModifiedOrders() {
         if (statusKind === "closed") {
           const normalized = normalizeOrder(changedOrder) || { orderId, number: orderId };
           removeDispatchedOrder(normalized);
-          removeKdsReadyOrder(normalized);
+          if (ENABLE_KDS) {
+            removeKdsReadyOrder(normalized);
+          }
           writeOrders(readOrders().filter((order) => !isSameOrder(order, normalized)));
           processedOrders.push(orderId);
           continue;
@@ -2509,7 +2516,9 @@ async function syncPartnerModifiedOrders() {
 
           if (normalized) {
             writeOrders(readOrders().filter((order) => !isSameOrder(order, normalized)));
-            removeKdsReadyOrder(normalized);
+            if (ENABLE_KDS) {
+              removeKdsReadyOrder(normalized);
+            }
             recordDispatchedOrder(normalized, {
               eventType: String(getDeepValue(changedOrder, ["status"]) || "").toUpperCase(),
             });
@@ -3372,6 +3381,15 @@ function buildKdsDebug() {
 }
 
 function kdsStatusForOrder(order, readyOrders = readKdsReadyOrders()) {
+  if (!ENABLE_KDS) {
+    return {
+      label: "Em preparo",
+      state: "preparing",
+      readyCount: 0,
+      totalCount: 0,
+    };
+  }
+
   const productionKeys = productionItemKeys(order);
 
   if (productionKeys.length === 0) {
@@ -3426,7 +3444,7 @@ async function syncOpenOrdersForPageLoad() {
 }
 
 function ordersWithKdsStatus() {
-  const readyOrders = readKdsReadyOrders();
+  const readyOrders = ENABLE_KDS ? readKdsReadyOrders() : [];
 
   return readOrders()
     .map((order) => ({
@@ -3638,7 +3656,9 @@ async function handleWebhook(payload) {
     if (currentIndex >= 0) {
       const removedOrder = orders.splice(currentIndex, 1)[0];
       writeOrders(orders);
-      removeKdsReadyOrder(removedOrder);
+      if (ENABLE_KDS) {
+        removeKdsReadyOrder(removedOrder);
+      }
 
       if (removalKind === "dispatched") {
         recordDispatchedOrder(removedOrder, payload);
@@ -3647,7 +3667,9 @@ async function handleWebhook(payload) {
 
     if (removalKind === "closed") {
       removeDispatchedOrder(normalizedOrder);
-      removeKdsReadyOrder(normalizedOrder);
+      if (ENABLE_KDS) {
+        removeKdsReadyOrder(normalizedOrder);
+      }
     }
 
     return {
@@ -3661,7 +3683,9 @@ async function handleWebhook(payload) {
   const activeOrder = { ...normalizedOrder, lastSeenOpenAt: Date.now() };
 
   if (isOrderAlreadyDispatched(activeOrder)) {
-    removeKdsReadyOrder(activeOrder);
+    if (ENABLE_KDS) {
+      removeKdsReadyOrder(activeOrder);
+    }
     writeOrders(orders.filter((order) => !isSameOrder(order, activeOrder)));
 
     return {
@@ -3680,9 +3704,11 @@ async function handleWebhook(payload) {
   }
 
   writeOrders(orders);
-  reconcileKdsReadyOrder(activeOrder, previousOrder);
+  if (ENABLE_KDS) {
+    reconcileKdsReadyOrder(activeOrder, previousOrder);
+  }
 
-  if (isProductionReadyEvent({ ...payload, ...payloadForOrder }, activeOrder)) {
+  if (ENABLE_KDS && isProductionReadyEvent({ ...payload, ...payloadForOrder }, activeOrder)) {
     const readyResult = markKdsOrderReadyFromCardapio(activeOrder);
     recordSystemEvent(
       { order: activeOrder.number, orderId: activeOrder.orderId, source: "cardapio-ready" },
@@ -3702,6 +3728,12 @@ async function handleWebhook(payload) {
 
 function serveStatic(request, response) {
   const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
+
+  if (!ENABLE_KDS && ["/kds", "/producao", "/kds.html"].includes(requestPath)) {
+    serveKdsPausedPage(response);
+    return;
+  }
+
   const routeAliases = {
     "/": "/index.html",
     "/kds": "/kds.html",
@@ -3728,6 +3760,32 @@ function serveStatic(request, response) {
     });
     response.end(content);
   });
+}
+
+function serveKdsPausedPage(response) {
+  response.writeHead(200, { "Content-Type": contentTypes[".html"] });
+  response.end(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KDS pausado</title>
+    <style>
+      body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0d1218;color:#f8fafc;font-family:Arial,sans-serif}
+      main{max-width:620px;padding:32px;text-align:center}
+      h1{font-size:42px;margin:0 0 12px}
+      p{font-size:20px;color:#bfd0e6;line-height:1.45}
+      a{display:inline-block;margin-top:18px;padding:14px 20px;border-radius:8px;background:#f8fafc;color:#08111b;font-weight:800;text-decoration:none}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>KDS pausado</h1>
+      <p>Para estabilizar a operação, o sistema está rodando somente com o Painel de Expedição.</p>
+      <a href="/">Abrir Painel de Expedição</a>
+    </main>
+  </body>
+</html>`);
 }
 
 const server = http.createServer(async (request, response) => {
@@ -3855,6 +3913,15 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && url.pathname === "/api/production-summary") {
     sendJson(response, 200, buildProductionSummary());
+    return;
+  }
+
+  if (!ENABLE_KDS && url.pathname.startsWith("/api/kds")) {
+    sendJson(response, 503, {
+      ok: false,
+      action: "kds-paused",
+      message: "KDS pausado. Operacao atual focada somente no Painel de Expedicao.",
+    });
     return;
   }
 

@@ -326,7 +326,6 @@ function renderOrders() {
   orderList.innerHTML = visibleOrders
     .map((order) => {
       const status = statusFor(order);
-      const kdsStatus = kdsStatusFor(order);
       const isDuplicate = isPossibleDuplicate(order, duplicateInfo);
 
       return `
@@ -346,7 +345,6 @@ function renderOrders() {
             <span class="mobile-label">Cidade</span>
             <strong>${displayCity(order)}</strong>
           </div>
-          <div class="order-kds-status ${kdsStatus.state}">${kdsStatus.label}</div>
           <div class="timer">${formatTimer(order)}</div>
           <div class="status ${status.className}">${status.label}</div>
         </article>
@@ -663,8 +661,12 @@ function scheduleLiveRefresh() {
   liveRefreshTimer = setTimeout(() => {
     loadOrders();
     loadDispatchedOrders();
-    loadEvents();
-    loadHealth();
+    if (activeFilter === "events") {
+      loadEvents();
+    }
+    if (activeFilter === "monitor") {
+      loadHealth();
+    }
   }, 150);
 }
 
@@ -707,6 +709,16 @@ tabs.forEach((tab) => {
 
     tabs.forEach((item) => item.classList.toggle("active", item === tab));
     configToggle?.classList.toggle("active", isConfigFilter(activeFilter));
+
+    if (activeFilter === "events") {
+      loadEvents();
+    }
+
+    if (activeFilter === "monitor") {
+      loadEvents();
+      loadHealth();
+    }
+
     renderOrders();
   });
 });
@@ -755,11 +767,15 @@ limitInput.addEventListener("input", () => {
 loadOrders();
 updateFullscreenButton();
 loadDispatchedOrders();
-loadEvents();
-loadHealth();
 connectLiveUpdates();
-setInterval(loadOrders, 5000);
-setInterval(loadDispatchedOrders, 5000);
-setInterval(loadEvents, 5000);
-setInterval(loadHealth, 5000);
+setInterval(loadOrders, 15000);
+setInterval(loadDispatchedOrders, 15000);
+setInterval(() => {
+  if (activeFilter === "events") {
+    loadEvents();
+  }
+  if (activeFilter === "monitor") {
+    loadHealth();
+  }
+}, 15000);
 setInterval(renderOrders, 1000);
