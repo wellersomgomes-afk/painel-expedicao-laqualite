@@ -609,6 +609,10 @@ h1 {
   background: var(--ok);
 }
 
+.status.ready {
+  background: var(--ok);
+}
+
 .status.warning {
   background: var(--warning);
 }

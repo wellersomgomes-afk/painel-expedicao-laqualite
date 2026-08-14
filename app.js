@@ -81,11 +81,19 @@ function formatTimer(order) {
   return `${minutes}:${seconds}`;
 }
 
+function isPickupReady(order) {
+  return isPickup(order) && order?.kdsStatus?.state === "ready";
+}
+
 function isLate(order) {
-  return elapsedMinutes(order) >= lateLimitMinutes;
+  return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitMinutes;
 }
 
 function statusFor(order) {
+  if (isPickupReady(order)) {
+    return { label: "Pronto para retirada", className: "ready" };
+  }
+
   const minutes = elapsedMinutes(order);
   const attentionLimit = Math.min(20, Math.max(lateLimitMinutes - 10, 0));
 
