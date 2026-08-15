@@ -19,8 +19,7 @@ const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_API_KEY = process.env.CARDAPIO_API_KEY || "";
 const CARDAPIO_PARTNER_KEY = process.env.CARDAPIO_PARTNER_KEY || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
-const CARDAPIO_READY_ENDPOINT_TEMPLATE =
-  process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "{orderURL}/readyForPickup";
+const CARDAPIO_READY_ENDPOINT_TEMPLATE = process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "";
 const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
@@ -932,34 +931,16 @@ async function saveKdsReadyItems(target, source) {
   }
 
   writeKdsReadyOrders(readyOrders);
-  const cardapioResult = isOrderReady
-    ? await notifyCardapioOrderReadySafely(order)
-    : { ok: true, action: "cardapio-not-called", message: "Ainda existem produtos pendentes no KDS." };
+  const cardapioResult = {
+    ok: true,
+    action: isOrderReady ? "kds-ready-internal" : "cardapio-not-called",
+    message: isOrderReady
+      ? "Pronto registrado apenas no KDS. Cardapio Web sera atualizado no despacho ou retirada."
+      : "Ainda existem produtos pendentes no KDS.",
+  };
 
   if (isOrderReady) {
     recordSystemEvent({ order: order.number, orderId: order.orderId, source }, cardapioResult);
-
-    if (!cardapioResult.ok) {
-      const failedReadyOrders = readKdsReadyOrders();
-      const failedReadyIndex = failedReadyOrders.findIndex((item) => isSameOrder(item, order));
-
-      if (failedReadyIndex >= 0) {
-        failedReadyOrders[failedReadyIndex] = {
-          ...failedReadyOrders[failedReadyIndex],
-          readyAt: null,
-        };
-        writeKdsReadyOrders(failedReadyOrders);
-      }
-
-      return {
-        ok: false,
-        action: "cardapio-ready-failed",
-        order: order.number,
-        itemKeys: targetKeys,
-        message: cardapioResult.message || "Nao foi possivel marcar pronto no Cardapio Web.",
-        cardapio: cardapioResult,
-      };
-    }
   }
 
   return {

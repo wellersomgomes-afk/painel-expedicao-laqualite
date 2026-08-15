@@ -921,17 +921,13 @@ async function markOrderReady(button) {
       throw new Error("Falha ao marcar pronto");
     }
 
-    const result = await response.json().catch(() => ({}));
-
-    if (result.cardapio && result.cardapio.ok === false) {
-      throw new Error(result.cardapio.message || "Pedido ficou pronto no KDS, mas o Cardapio Web nao confirmou.");
-    }
+    await response.json().catch(() => ({}));
 
     await loadKdsOrders();
   } catch (error) {
     button.disabled = false;
     button.textContent = "Pronto";
-    alert(error.message || "Nao foi possivel atualizar o Cardapio Web.");
+    alert(error.message || "Nao foi possivel marcar pronto no KDS.");
   }
 }
 
@@ -1025,17 +1021,13 @@ async function markItemReady(button) {
       throw new Error("Falha ao marcar produto pronto");
     }
 
-    const result = await response.json().catch(() => ({}));
-
-    if (result.cardapio && result.cardapio.ok === false) {
-      throw new Error(result.cardapio.message || "Produto ficou pronto no KDS, mas o Cardapio Web nao confirmou.");
-    }
+    await response.json().catch(() => ({}));
 
     await loadKdsOrders();
   } catch (error) {
     button.disabled = false;
     button.textContent = "Produto pronto";
-    alert(error.message || "Nao foi possivel atualizar o Cardapio Web.");
+    alert(error.message || "Nao foi possivel marcar produto pronto no KDS.");
   }
 }
 
