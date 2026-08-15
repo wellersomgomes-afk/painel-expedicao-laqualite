@@ -1712,6 +1712,22 @@ h1 {
   line-height: 1;
 }
 
+.kds-product-line span {
+  overflow-wrap: anywhere;
+}
+
+.kds-size-highlight {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 3px 8px;
+  border: 2px solid #ffcf5a;
+  border-radius: 6px;
+  background: #ffcf5a;
+  color: #101318;
+  font: inherit;
+  line-height: 0.95;
+}
+
 .kds-quantity {
   width: fit-content;
   min-width: 44px;

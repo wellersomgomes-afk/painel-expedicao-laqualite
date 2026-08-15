@@ -110,7 +110,14 @@ function normalizeAddress(value) {
 
 function isMeaningfulCustomerName(value) {
   const name = normalizeCustomerName(value);
-  const genericNames = new Set(["cliente", "nao informado", "consumidor", "sem nome"]);
+  const genericNames = new Set([
+    "cliente",
+    "cliente nao identificado",
+    "nao identificado",
+    "nao informado",
+    "consumidor",
+    "sem nome",
+  ]);
 
   return name.length >= 5 && !genericNames.has(name);
 }
@@ -272,22 +279,16 @@ function duplicateSignals(sourceOrders) {
     phones: duplicateKeyCounts(sourceOrders, (order) =>
       isMeaningfulPhone(order.phone) ? normalizePhone(order.phone) : ""
     ),
-    addresses: duplicateKeyCounts(sourceOrders, (order) =>
-      isMeaningfulAddress(order.address) ? normalizeAddress(order.address) : ""
-    ),
-    nearby: duplicateNearbyOrders(sourceOrders),
   };
 }
 
 function isPossibleDuplicate(order, signals) {
   const phone = normalizePhone(order.phone);
-  const address = normalizeAddress(order.address);
-  const id = orderDuplicateId(order);
+  const customer = normalizeCustomerName(order.customer);
 
   return (
     (isMeaningfulPhone(order.phone) && (signals.phones.get(phone) || 0) > 1) ||
-    (isMeaningfulAddress(order.address) && (signals.addresses.get(address) || 0) > 1) ||
-    (id && signals.nearby.has(id))
+    (isMeaningfulCustomerName(order.customer) && (signals.names.get(customer) || 0) > 1)
   );
 }
 
@@ -446,6 +447,23 @@ function renderItemNote(note) {
   `;
 }
 
+function renderProductName(name) {
+  const text = String(name || "");
+
+  return text
+    .split(/(\bBROTO\b|\bM[EÉ]DIA\b)/gi)
+    .map((part) => {
+      const normalized = normalizeText(part);
+
+      if (normalized === "broto" || normalized === "media") {
+        return `<mark class="kds-size-highlight">${part}</mark>`;
+      }
+
+      return part;
+    })
+    .join("");
+}
+
 function renderItem(item, order) {
   const complements = item.complements || [];
   const hasBorderHighlight = isBorderText(item.name) || complements.some((complement) => isBorderText(complement.name));
@@ -457,7 +475,7 @@ function renderItem(item, order) {
     <article class="kds-order-item${hasBorderHighlight ? " has-border" : ""}">
       <div class="kds-product-line">
         <strong class="kds-quantity${quantityClass}">${formatQuantity(item.quantity)}x</strong>
-        <span>${item.name}</span>
+        <span>${renderProductName(item.name)}</span>
       </div>
       ${complements.length > 0 ? `
         <ul class="kds-complements">

@@ -249,7 +249,14 @@ function normalizePhone(value) {
 
 function isMeaningfulCustomerName(value) {
   const name = normalizeCustomerName(value);
-  const genericNames = new Set(["cliente", "nao informado", "consumidor", "sem nome"]);
+  const genericNames = new Set([
+    "cliente",
+    "cliente nao identificado",
+    "nao identificado",
+    "nao informado",
+    "consumidor",
+    "sem nome",
+  ]);
 
   return name.length >= 5 && !genericNames.has(name);
 }
