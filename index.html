@@ -128,16 +128,29 @@
         </div>
       </section>
 
-      <section class="settings-panel" id="settings-panel" aria-label="Tempo de saida da loja" hidden>
+      <section class="settings-panel" id="settings-panel" aria-label="Tempos de saida da loja" hidden>
         <div class="settings-copy">
-          <span>Tempo de saida da loja</span>
-          <strong><span id="limit-label">30</span> minutos</strong>
+          <span>Tempos de saida da loja</span>
+          <strong>
+            <span id="delivery-limit-label">30</span>/<span id="pickup-limit-label">30</span>
+            minutos
+          </strong>
+          <small>Entrega / Retirada</small>
         </div>
 
-        <label class="time-control">
-          <span>Minutos para considerar atrasado</span>
-          <input id="limit-input" type="number" min="5" max="120" step="1" value="30" />
-        </label>
+        <div class="time-controls">
+          <label class="time-control">
+            <span>Tempo de entrega</span>
+            <input id="delivery-limit-input" type="number" min="5" max="120" step="1" value="30" />
+            <small>Minutos para entrega atrasar</small>
+          </label>
+
+          <label class="time-control">
+            <span>Tempo de retirada</span>
+            <input id="pickup-limit-input" type="number" min="5" max="120" step="1" value="30" />
+            <small>Minutos para retirada atrasar</small>
+          </label>
+        </div>
 
         <div class="sound-control" aria-label="Alerta sonoro de atraso">
           <label class="sound-toggle">

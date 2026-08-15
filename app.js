@@ -1,8 +1,16 @@
 const DEFAULT_LATE_LIMIT_MINUTES = 30;
 const savedLateLimit = Number(localStorage.getItem("lateLimitMinutes"));
-let lateLimitMinutes = Number.isFinite(savedLateLimit) && savedLateLimit > 0
+const savedDeliveryLateLimit = Number(localStorage.getItem("deliveryLateLimitMinutes"));
+const savedPickupLateLimit = Number(localStorage.getItem("pickupLateLimitMinutes"));
+const initialLateLimit = Number.isFinite(savedLateLimit) && savedLateLimit > 0
   ? savedLateLimit
   : DEFAULT_LATE_LIMIT_MINUTES;
+let deliveryLateLimitMinutes = Number.isFinite(savedDeliveryLateLimit) && savedDeliveryLateLimit > 0
+  ? savedDeliveryLateLimit
+  : initialLateLimit;
+let pickupLateLimitMinutes = Number.isFinite(savedPickupLateLimit) && savedPickupLateLimit > 0
+  ? savedPickupLateLimit
+  : initialLateLimit;
 
 let orders = [];
 let dispatchedOrders = [];
@@ -58,8 +66,10 @@ const monitorWritesCard = document.querySelector("#monitor-writes-card");
 const tabs = document.querySelectorAll(".tab");
 const configToggle = document.querySelector("#config-toggle");
 const configOptions = document.querySelector("#config-options");
-const limitInput = document.querySelector("#limit-input");
-const limitLabel = document.querySelector("#limit-label");
+const deliveryLimitInput = document.querySelector("#delivery-limit-input");
+const pickupLimitInput = document.querySelector("#pickup-limit-input");
+const deliveryLimitLabel = document.querySelector("#delivery-limit-label");
+const pickupLimitLabel = document.querySelector("#pickup-limit-label");
 const lateAlertToggle = document.querySelector("#late-alert-toggle");
 const lateAlertTest = document.querySelector("#late-alert-test");
 const fullscreenButton = document.querySelector("#fullscreen-button");
@@ -98,8 +108,12 @@ function isPickupReady(order) {
   return isPickup(order) && (order?.externalReadyAt || order?.kdsStatus?.state === "ready");
 }
 
+function lateLimitForOrder(order) {
+  return isPickup(order) ? pickupLateLimitMinutes : deliveryLateLimitMinutes;
+}
+
 function isLate(order) {
-  return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitMinutes;
+  return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order);
 }
 
 function alertKeyForOrder(order) {
@@ -184,6 +198,7 @@ function statusFor(order) {
   }
 
   const minutes = elapsedMinutes(order);
+  const lateLimitMinutes = lateLimitForOrder(order);
   const attentionLimit = Math.min(20, Math.max(lateLimitMinutes - 10, 0));
 
   if (minutes >= lateLimitMinutes + 15) {
@@ -401,8 +416,18 @@ function renderOrders() {
       minute: "2-digit",
     });
   }
-  limitInput.value = String(lateLimitMinutes);
-  limitLabel.textContent = String(lateLimitMinutes);
+  if (deliveryLimitInput) {
+    deliveryLimitInput.value = String(deliveryLateLimitMinutes);
+  }
+  if (pickupLimitInput) {
+    pickupLimitInput.value = String(pickupLateLimitMinutes);
+  }
+  if (deliveryLimitLabel) {
+    deliveryLimitLabel.textContent = String(deliveryLateLimitMinutes);
+  }
+  if (pickupLimitLabel) {
+    pickupLimitLabel.textContent = String(pickupLateLimitMinutes);
+  }
   ordersPanel.hidden = isSettingsOpen || isEventsOpen || isMonitorOpen || isDispatchedOpen;
   dispatchedPanel.hidden = !isDispatchedOpen;
   settingsPanel.hidden = !isSettingsOpen;
@@ -905,17 +930,33 @@ if (lateAlertTest) {
   window.addEventListener(eventName, ensureLateAlertAudio, { once: true });
 });
 
-limitInput.addEventListener("input", () => {
-  const nextLimit = Number(limitInput.value);
+if (deliveryLimitInput) {
+  deliveryLimitInput.addEventListener("input", () => {
+    const nextLimit = Number(deliveryLimitInput.value);
 
-  if (!Number.isFinite(nextLimit) || nextLimit < 1) {
-    return;
-  }
+    if (!Number.isFinite(nextLimit) || nextLimit < 1) {
+      return;
+    }
 
-  lateLimitMinutes = nextLimit;
-  localStorage.setItem("lateLimitMinutes", String(lateLimitMinutes));
-  renderOrders();
-});
+    deliveryLateLimitMinutes = nextLimit;
+    localStorage.setItem("deliveryLateLimitMinutes", String(deliveryLateLimitMinutes));
+    renderOrders();
+  });
+}
+
+if (pickupLimitInput) {
+  pickupLimitInput.addEventListener("input", () => {
+    const nextLimit = Number(pickupLimitInput.value);
+
+    if (!Number.isFinite(nextLimit) || nextLimit < 1) {
+      return;
+    }
+
+    pickupLateLimitMinutes = nextLimit;
+    localStorage.setItem("pickupLateLimitMinutes", String(pickupLateLimitMinutes));
+    renderOrders();
+  });
+}
 
 loadOrders();
 updateFullscreenButton();
