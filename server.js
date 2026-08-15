@@ -39,6 +39,11 @@ const MAX_DISPATCHED_STORED = Number(process.env.MAX_DISPATCHED_STORED) || 80;
 const MAX_READY_STORED = Number(process.env.MAX_READY_STORED) || 120;
 const MAX_UPDATE_CLIENTS = Number(process.env.MAX_UPDATE_CLIENTS) || 20;
 const UPDATE_CLIENT_TTL_MS = Number(process.env.UPDATE_CLIENT_TTL_MS) || 10 * 60 * 1000;
+const MAX_REQUEST_BODY_BYTES = Number(process.env.MAX_REQUEST_BODY_BYTES) || 1024 * 1024;
+const MAX_EVENT_LOG_TEXT = Number(process.env.MAX_EVENT_LOG_TEXT) || 700;
+const MAX_EVENT_LOG_KEYS = Number(process.env.MAX_EVENT_LOG_KEYS) || 24;
+const MEMORY_GC_THRESHOLD_MB = Number(process.env.MEMORY_GC_THRESHOLD_MB) || 360;
+const MEMORY_FORCE_COMPACT_THRESHOLD_MB = Number(process.env.MEMORY_FORCE_COMPACT_THRESHOLD_MB) || 430;
 const ENABLE_KDS = process.env.ENABLE_KDS === "true";
 // Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
 const ACTIVE_PRODUCTION_KDS_SECTORS = new Set(["pizzas"]);
@@ -53,6 +58,7 @@ let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 let partnerOrdersLastSuccessfulSyncAt = 0;
 let partnerOrdersSyncInFlight = null;
+let openOrdersSyncInFlight = null;
 const orderLocks = new Map();
 const storageCache = new Map();
 const storageWriteQueues = new Map();
@@ -345,10 +351,33 @@ function compactOperationalState() {
   }
 
   pruneEventClients();
+  collectGarbageIfAvailable();
+}
 
+function collectGarbageIfAvailable() {
   if (typeof global.gc === "function") {
     global.gc();
   }
+}
+
+function maintainMemoryPressure() {
+  const memory = memorySnapshot();
+
+  if (memory.rssMb < MEMORY_GC_THRESHOLD_MB) {
+    pruneEventClients();
+    return memory;
+  }
+
+  compactOperationalState();
+
+  const nextMemory = memorySnapshot();
+
+  if (nextMemory.rssMb >= MEMORY_FORCE_COMPACT_THRESHOLD_MB) {
+    collectGarbageIfAvailable();
+    return memorySnapshot();
+  }
+
+  return nextMemory;
 }
 
 function notifyDataChanged(type = "data") {
@@ -1159,34 +1188,71 @@ function formatLocalTime(value = Date.now()) {
   });
 }
 
+function compactEventValue(value, depth = 0) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value.length > MAX_EVENT_LOG_TEXT
+      ? `${value.slice(0, MAX_EVENT_LOG_TEXT)}...`
+      : value;
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  if (depth >= 4) {
+    return Array.isArray(value) ? `[${value.length} item(s)]` : "{...}";
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 12).map((item) => compactEventValue(item, depth + 1));
+  }
+
+  return Object.entries(value)
+    .slice(0, MAX_EVENT_LOG_KEYS)
+    .reduce((compact, [key, item]) => {
+      compact[key] = compactEventValue(item, depth + 1);
+      return compact;
+    }, {});
+}
+
+function compactEventRecord(record) {
+  return compactEventValue(record);
+}
+
 function recordEvent(request, body, result) {
   const events = readEvents();
-
-  events.unshift({
+  const eventRecord = {
     receivedAt: formatLocalDateTime(),
     method: request.method,
     path: request.url,
-    result,
-    body,
-  });
+    result: compactEventRecord(result),
+    body: compactEventRecord(body),
+  };
+
+  events.unshift(eventRecord);
 
   writeEvents(events);
-  console.log("Webhook recebido:", JSON.stringify({ result, body }, null, 2));
+  console.log("Webhook recebido:", JSON.stringify(eventRecord));
 }
 
 function recordSystemEvent(body, result) {
   const events = readEvents();
-
-  events.unshift({
+  const eventRecord = {
     receivedAt: formatLocalDateTime(),
     method: "SYSTEM",
     path: "/sync-open-orders",
-    result,
-    body,
-  });
+    result: compactEventRecord(result),
+    body: compactEventRecord(body),
+  };
+
+  events.unshift(eventRecord);
 
   writeEvents(events);
-  console.log("Sincronizacao:", JSON.stringify({ result, body }, null, 2));
+  console.log("Sincronizacao:", JSON.stringify(eventRecord));
 }
 
 function sendJson(response, statusCode, data) {
@@ -1415,6 +1481,8 @@ function memorySnapshot() {
 }
 
 function healthSnapshot() {
+  const memory = maintainMemoryPressure();
+
   return {
     ok: true,
     storage: storageMode,
@@ -1425,9 +1493,9 @@ function healthSnapshot() {
     pendingOrderActions: orderLocks.size,
     pendingStorageWrites: storageWriteQueues.size,
     connectedScreens: eventClients.size,
-    memory: memorySnapshot(),
+    memory,
     orders: readOrders().length,
-    readyOrders: readKdsReadyOrders().length,
+    readyOrders: ENABLE_KDS ? readKdsReadyOrders().length : 0,
     dispatchedOrders: readDispatchedOrders().length,
     drivers: readDrivers().length,
   };
@@ -1436,12 +1504,41 @@ function healthSnapshot() {
 function readBody(request) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let bodySize = 0;
+    let finished = false;
+
+    function finishWithError(error) {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      reject(error);
+    }
 
     request.on("data", (chunk) => {
+      if (finished) {
+        return;
+      }
+
+      bodySize += chunk.length;
+
+      if (bodySize > MAX_REQUEST_BODY_BYTES) {
+        finishWithError(new Error("Corpo da requisicao muito grande."));
+        request.destroy();
+        return;
+      }
+
       body += chunk;
     });
 
     request.on("end", () => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+
       if (!body) {
         resolve({});
         return;
@@ -1453,6 +1550,8 @@ function readBody(request) {
         reject(error);
       }
     });
+
+    request.on("error", finishWithError);
   });
 }
 
@@ -2879,7 +2978,7 @@ async function syncOpenOrderEvents() {
   };
 }
 
-async function syncOpenOrders() {
+async function performSyncOpenOrders() {
   const results = [];
   const errors = [];
 
@@ -2921,6 +3020,20 @@ async function syncOpenOrders() {
     errors,
     message: errors.map((error) => `${error.source}: ${error.message}`).join(" | "),
   };
+}
+
+async function syncOpenOrders() {
+  if (openOrdersSyncInFlight) {
+    return openOrdersSyncInFlight;
+  }
+
+  openOrdersSyncInFlight = performSyncOpenOrders()
+    .finally(() => {
+      openOrdersSyncInFlight = null;
+      maintainMemoryPressure();
+    });
+
+  return openOrdersSyncInFlight;
 }
 
 async function syncOpenOrdersSafely() {
@@ -4051,6 +4164,7 @@ initializeStorage().then(() => {
     setTimeout(syncOpenOrdersSafely, 5000);
     setInterval(syncOpenOrdersSafely, SYNC_OPEN_ORDERS_INTERVAL_MS);
     setInterval(pingEventClients, 25000);
+    setInterval(maintainMemoryPressure, 60 * 1000);
     setInterval(compactOperationalState, 5 * 60 * 1000);
   });
 });

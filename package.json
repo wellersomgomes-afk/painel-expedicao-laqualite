@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node --expose-gc --max-old-space-size=160 server.js"
   },
   "dependencies": {
     "pg": "^8.13.1"
