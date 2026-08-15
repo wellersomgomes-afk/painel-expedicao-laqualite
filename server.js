@@ -44,7 +44,7 @@ const MAX_EVENT_LOG_TEXT = Number(process.env.MAX_EVENT_LOG_TEXT) || 700;
 const MAX_EVENT_LOG_KEYS = Number(process.env.MAX_EVENT_LOG_KEYS) || 24;
 const MEMORY_GC_THRESHOLD_MB = Number(process.env.MEMORY_GC_THRESHOLD_MB) || 360;
 const MEMORY_FORCE_COMPACT_THRESHOLD_MB = Number(process.env.MEMORY_FORCE_COMPACT_THRESHOLD_MB) || 430;
-const ENABLE_KDS = process.env.ENABLE_KDS === "true";
+const ENABLE_KDS = process.env.ENABLE_KDS !== "false";
 // Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
 const ACTIVE_PRODUCTION_KDS_SECTORS = new Set(["pizzas"]);
 const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
