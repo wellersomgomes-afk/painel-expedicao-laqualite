@@ -7,3 +7,5 @@ services:
     envVars:
       - key: ENABLE_KDS
         value: "true"
+      - key: SYNC_OPEN_ORDERS_INTERVAL_MS
+        value: "10000"

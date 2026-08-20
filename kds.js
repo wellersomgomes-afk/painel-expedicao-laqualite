@@ -243,6 +243,27 @@ function duplicatePhoneKeys(sourceOrders, signals) {
     .filter(Boolean);
 }
 
+function formatDuplicatePhone(phone) {
+  if (phone.length === 11) {
+    return `(${phone.slice(0, 2)}) ${phone.slice(2, 7)}-${phone.slice(7)}`;
+  }
+
+  if (phone.length === 10) {
+    return `(${phone.slice(0, 2)}) ${phone.slice(2, 6)}-${phone.slice(6)}`;
+  }
+
+  return phone;
+}
+
+function duplicatePopupMessage(phones, signals) {
+  const lines = phones.map((phone) => {
+    const count = signals.phones.get(phone) || 0;
+    return `${formatDuplicatePhone(phone)} - ${count} pedidos`;
+  });
+
+  return `ATENCAO: possivel pedido duplicado.\n\nMesmo telefone encontrado:\n${lines.join("\n")}`;
+}
+
 function groupDuplicateOrders(sourceOrders, signals) {
   return [...sourceOrders].sort((left, right) => {
     const leftPhone = normalizePhone(left.phone);
@@ -310,17 +331,16 @@ function playDuplicateAlertSound() {
 
 function handleDuplicateAlerts(sourceOrders, signals) {
   const currentDuplicatePhones = new Set(duplicatePhoneKeys(sourceOrders, signals));
-
-  if (!previousDuplicatePhoneKeys) {
-    previousDuplicatePhoneKeys = currentDuplicatePhones;
-    return;
-  }
-
-  const hasNewDuplicatePhone = [...currentDuplicatePhones].some((phone) => !previousDuplicatePhoneKeys.has(phone));
+  const newDuplicatePhones = !previousDuplicatePhoneKeys
+    ? [...currentDuplicatePhones]
+    : [...currentDuplicatePhones].filter((phone) => !previousDuplicatePhoneKeys.has(phone));
   previousDuplicatePhoneKeys = currentDuplicatePhones;
 
-  if (hasNewDuplicatePhone) {
+  if (newDuplicatePhones.length > 0) {
     playDuplicateAlertSound();
+    window.setTimeout(() => {
+      alert(duplicatePopupMessage(newDuplicatePhones, signals));
+    }, 120);
   }
 }
 
