@@ -605,6 +605,19 @@ h1 {
   text-transform: uppercase;
 }
 
+.duplicate-group {
+  width: fit-content;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 207, 90, 0.7);
+  border-radius: 5px;
+  color: #ffcf5a;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .mobile-label {
   display: none;
   color: var(--muted);
@@ -1388,6 +1401,11 @@ h1 {
 .kds-duplicate-alert {
   margin-top: 2px;
   font-size: 11px;
+}
+
+.kds-duplicate-group {
+  margin-top: 2px;
+  font-size: 10px;
 }
 
 .dispatch-main strong {

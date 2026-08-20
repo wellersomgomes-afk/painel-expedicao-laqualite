@@ -81,6 +81,7 @@ const LATE_ALERT_SOUND_KEY = "lateAlertSoundEnabled";
 let lateAlertSoundEnabled = localStorage.getItem(LATE_ALERT_SOUND_KEY) !== "false";
 let lateAlertAudioContext = null;
 let previousLateOrderKeys = null;
+let previousDuplicatePhoneKeys = null;
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -143,6 +144,14 @@ function playLateAlertSound() {
     return;
   }
 
+  playAlertTone([880, 988, 880]);
+}
+
+function playDuplicateAlertSound() {
+  playAlertTone([660, 880, 1175, 880]);
+}
+
+function playAlertTone(notes) {
   const audioContext = ensureLateAlertAudio();
 
   if (!audioContext) {
@@ -150,8 +159,6 @@ function playLateAlertSound() {
   }
 
   const now = audioContext.currentTime;
-  const notes = [880, 988, 880];
-
   notes.forEach((frequency, index) => {
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
@@ -234,31 +241,8 @@ function displayCity(order) {
   return isPickup(order) ? "" : order.city || "Cidade nao informada";
 }
 
-function normalizeCustomerName(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLowerCase();
-}
-
 function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
-}
-
-function isMeaningfulCustomerName(value) {
-  const name = normalizeCustomerName(value);
-  const genericNames = new Set([
-    "cliente",
-    "cliente nao identificado",
-    "nao identificado",
-    "nao informado",
-    "consumidor",
-    "sem nome",
-  ]);
-
-  return name.length >= 5 && !genericNames.has(name);
 }
 
 function isMeaningfulPhone(value) {
@@ -278,23 +262,68 @@ function duplicateKeyCounts(sourceOrders, keyFactory) {
 
 function duplicateSignals(sourceOrders) {
   return {
-    names: duplicateKeyCounts(sourceOrders, (order) =>
-      isMeaningfulCustomerName(order.customer) ? normalizeCustomerName(order.customer) : ""
-    ),
     phones: duplicateKeyCounts(sourceOrders, (order) =>
       isMeaningfulPhone(order.phone) ? normalizePhone(order.phone) : ""
     ),
   };
 }
 
-function isPossibleDuplicate(order, signals) {
+function duplicatePhoneCount(order, signals) {
   const phone = normalizePhone(order.phone);
-  const customer = normalizeCustomerName(order.customer);
 
-  return (
-    (isMeaningfulPhone(order.phone) && (signals.phones.get(phone) || 0) > 1) ||
-    (isMeaningfulCustomerName(order.customer) && (signals.names.get(customer) || 0) > 1)
-  );
+  return isMeaningfulPhone(order.phone) ? signals.phones.get(phone) || 0 : 0;
+}
+
+function isPossibleDuplicate(order, signals) {
+  return duplicatePhoneCount(order, signals) > 1;
+}
+
+function duplicateGroupLabel(order, signals) {
+  const count = duplicatePhoneCount(order, signals);
+
+  return count > 1 ? `Mesmo telefone: ${count} pedidos` : "";
+}
+
+function duplicatePhoneKeys(sourceOrders, signals) {
+  return sourceOrders
+    .filter((order) => isPossibleDuplicate(order, signals))
+    .map((order) => normalizePhone(order.phone))
+    .filter(Boolean);
+}
+
+function groupDuplicateOrders(sourceOrders, signals) {
+  return [...sourceOrders].sort((left, right) => {
+    const leftPhone = normalizePhone(left.phone);
+    const rightPhone = normalizePhone(right.phone);
+    const leftDuplicate = isPossibleDuplicate(left, signals);
+    const rightDuplicate = isPossibleDuplicate(right, signals);
+
+    if (leftDuplicate !== rightDuplicate) {
+      return leftDuplicate ? -1 : 1;
+    }
+
+    if (leftDuplicate && rightDuplicate && leftPhone !== rightPhone) {
+      return leftPhone.localeCompare(rightPhone);
+    }
+
+    return orderSortValue(left) - orderSortValue(right);
+  });
+}
+
+function handleDuplicateAlerts(sourceOrders, signals) {
+  const currentDuplicatePhones = new Set(duplicatePhoneKeys(sourceOrders, signals));
+
+  if (!previousDuplicatePhoneKeys) {
+    previousDuplicatePhoneKeys = currentDuplicatePhones;
+    return;
+  }
+
+  const hasNewDuplicatePhone = [...currentDuplicatePhones].some((phone) => !previousDuplicatePhoneKeys.has(phone));
+  previousDuplicatePhoneKeys = currentDuplicatePhones;
+
+  if (hasNewDuplicatePhone) {
+    playDuplicateAlertSound();
+  }
 }
 
 function orderTypeLabel(order) {
@@ -472,10 +501,12 @@ function renderOrders() {
     return;
   }
 
-  orderList.innerHTML = visibleOrders
+  handleDuplicateAlerts(activeOrders, duplicateInfo);
+  orderList.innerHTML = groupDuplicateOrders(visibleOrders, duplicateInfo)
     .map((order) => {
       const status = statusFor(order);
       const isDuplicate = isPossibleDuplicate(order, duplicateInfo);
+      const duplicateLabel = duplicateGroupLabel(order, duplicateInfo);
 
       return `
         <article class="order-row priority-${status.className}${isDuplicate ? " has-duplicate-customer" : ""}">
@@ -485,7 +516,7 @@ function renderOrders() {
           <div class="order-info">
             <span class="mobile-label">Cliente</span>
             <strong>${order.customer}</strong>
-            ${isDuplicate ? '<span class="duplicate-alert">Possível duplicado</span>' : ""}
+            ${isDuplicate ? `<span class="duplicate-alert">Possível duplicado</span><span class="duplicate-group">${duplicateLabel}</span>` : ""}
           </div>
           <div class="order-info">
             <span class="mobile-label">Bairro</span>
