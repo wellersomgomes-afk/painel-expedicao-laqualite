@@ -1,59 +1,153 @@
 [
   {
-    "receivedAt": "08/08/2026, 10:34:40",
+    "receivedAt": "15/08/2026, 13:28:01",
     "method": "SYSTEM",
     "path": "/sync-open-orders",
     "result": {
-      "ok": false,
-      "action": "cardapio-dispatch-failed",
-      "order": "2004",
-      "dispatchAction": "dispatch",
-      "message": "Credenciais do Cardapio Web nao configuradas no Render."
+      "ok": true,
+      "action": "kds-ready-internal",
+      "message": "Pronto registrado apenas no KDS. Cardapio Web sera atualizado no despacho ou retirada."
     },
     "body": {
-      "order": "2004",
-      "orderId": "teste-entrega-2004",
-      "source": "kds-dispatch",
-      "action": "dispatch",
-      "driverName": "Wagner"
+      "order": "2108",
+      "orderId": "teste-entrega-2108",
+      "source": "kds-ready"
     }
   },
   {
-    "receivedAt": "08/08/2026, 10:26:52",
+    "receivedAt": "15/08/2026, 13:21:24",
     "method": "SYSTEM",
     "path": "/sync-open-orders",
     "result": {
-      "ok": false,
-      "action": "cardapio-dispatch-failed",
-      "order": "2005",
-      "dispatchAction": "dispatch",
-      "message": "Credenciais do Cardapio Web nao configuradas no Render."
+      "ok": true,
+      "action": "local-test-order-ready",
+      "order": "2108",
+      "message": "Pedido teste marcado pronto apenas no localhost."
     },
     "body": {
-      "order": "2005",
-      "orderId": "teste-entrega-2005",
-      "source": "kds-dispatch",
-      "action": "dispatch",
-      "driverName": "Celso"
+      "order": "2108",
+      "orderId": "teste-entrega-2108",
+      "source": "kds-ready"
     }
   },
   {
-    "receivedAt": "08/08/2026, 10:19:05",
-    "method": "SYSTEM",
-    "path": "/sync-open-orders",
+    "receivedAt": "14/08/2026, 11:31:50",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
     "result": {
-      "ok": false,
-      "action": "cardapio-dispatch-failed",
-      "order": "2001",
-      "dispatchAction": "dispatch",
-      "message": "Credenciais do Cardapio Web nao configuradas no Render."
+      "ok": true,
+      "action": "request-logged"
     },
     "body": {
-      "order": "2001",
-      "orderId": "teste-entrega-2001",
-      "source": "kds-dispatch",
-      "action": "dispatch",
-      "driverName": "Celso"
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:28:56",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:26:12",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:26:06",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:25:57",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:17:31",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:10:31",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 11:05:40",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 10:40:23",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
+    }
+  },
+  {
+    "receivedAt": "14/08/2026, 10:39:18",
+    "method": "GET",
+    "path": "/logo-la-qualite.png",
+    "result": {
+      "ok": true,
+      "action": "request-logged"
+    },
+    "body": {
+      "note": "Chamada recebida fora das rotas principais."
     }
   }
 ]

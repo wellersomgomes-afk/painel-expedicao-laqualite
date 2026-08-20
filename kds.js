@@ -293,18 +293,18 @@ function playDuplicateAlertSound() {
   notes.forEach((frequency, index) => {
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
-    const startsAt = now + index * 0.16;
+    const startsAt = now + index * 0.19;
 
     oscillator.type = "triangle";
     oscillator.frequency.setValueAtTime(frequency, startsAt);
     gain.gain.setValueAtTime(0.0001, startsAt);
-    gain.gain.exponentialRampToValueAtTime(0.16, startsAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.21, startsAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.17);
 
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
     oscillator.start(startsAt);
-    oscillator.stop(startsAt + 0.16);
+    oscillator.stop(startsAt + 0.19);
   });
 }
 

@@ -162,18 +162,18 @@ function playAlertTone(notes) {
   notes.forEach((frequency, index) => {
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
-    const startsAt = now + index * 0.18;
+    const startsAt = now + index * 0.22;
 
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(frequency, startsAt);
     gain.gain.setValueAtTime(0.0001, startsAt);
-    gain.gain.exponentialRampToValueAtTime(0.18, startsAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.16);
+    gain.gain.exponentialRampToValueAtTime(0.24, startsAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.2);
 
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
     oscillator.start(startsAt);
-    oscillator.stop(startsAt + 0.18);
+    oscillator.stop(startsAt + 0.22);
   });
 }
 
