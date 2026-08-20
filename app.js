@@ -81,7 +81,8 @@ const LATE_ALERT_SOUND_KEY = "lateAlertSoundEnabled";
 let lateAlertSoundEnabled = localStorage.getItem(LATE_ALERT_SOUND_KEY) !== "false";
 let lateAlertAudioContext = null;
 let previousLateOrderKeys = null;
-let previousDuplicatePhoneKeys = null;
+const acknowledgedDuplicateGroupKeys = new Set();
+let duplicatePopupOpen = false;
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -304,12 +305,43 @@ function formatDuplicatePhone(phone) {
 }
 
 function duplicatePopupMessage(phones, signals) {
-  const lines = phones.map((phone) => {
+  return phones.map((phone) => {
     const count = signals.phones.get(phone) || 0;
     return `${formatDuplicatePhone(phone)} - ${count} pedidos`;
   });
+}
 
-  return `ATENCAO: possivel pedido duplicado.\n\nMesmo telefone encontrado:\n${lines.join("\n")}`;
+function duplicateGroupKey(phone, signals) {
+  return `${phone}:${signals.phones.get(phone) || 0}`;
+}
+
+function showDuplicatePopup(phones, signals) {
+  if (duplicatePopupOpen || phones.length === 0) {
+    return;
+  }
+
+  duplicatePopupOpen = true;
+  const overlay = document.createElement("div");
+  overlay.className = "duplicate-modal-overlay";
+  overlay.innerHTML = `
+    <section class="duplicate-modal" role="alertdialog" aria-modal="true" aria-label="Possivel pedido duplicado">
+      <strong>Possivel pedido duplicado</strong>
+      <p>Mesmo telefone encontrado:</p>
+      <ul>
+        ${duplicatePopupMessage(phones, signals).map((line) => `<li>${line}</li>`).join("")}
+      </ul>
+      <button type="button">OK</button>
+    </section>
+  `;
+
+  overlay.querySelector("button").addEventListener("click", () => {
+    phones.forEach((phone) => acknowledgedDuplicateGroupKeys.add(duplicateGroupKey(phone, signals)));
+    duplicatePopupOpen = false;
+    overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+  overlay.querySelector("button").focus();
 }
 
 function groupDuplicateOrders(sourceOrders, signals) {
@@ -333,15 +365,20 @@ function groupDuplicateOrders(sourceOrders, signals) {
 
 function handleDuplicateAlerts(sourceOrders, signals) {
   const currentDuplicatePhones = new Set(duplicatePhoneKeys(sourceOrders, signals));
-  const newDuplicatePhones = !previousDuplicatePhoneKeys
-    ? [...currentDuplicatePhones]
-    : [...currentDuplicatePhones].filter((phone) => !previousDuplicatePhoneKeys.has(phone));
-  previousDuplicatePhoneKeys = currentDuplicatePhones;
+  const currentGroupKeys = new Set([...currentDuplicatePhones].map((phone) => duplicateGroupKey(phone, signals)));
+  const newDuplicatePhones = [...currentDuplicatePhones]
+    .filter((phone) => !acknowledgedDuplicateGroupKeys.has(duplicateGroupKey(phone, signals)));
+
+  [...acknowledgedDuplicateGroupKeys].forEach((key) => {
+    if (!currentGroupKeys.has(key)) {
+      acknowledgedDuplicateGroupKeys.delete(key);
+    }
+  });
 
   if (newDuplicatePhones.length > 0) {
     playDuplicateAlertSound();
     window.setTimeout(() => {
-      alert(duplicatePopupMessage(newDuplicatePhones, signals));
+      showDuplicatePopup(newDuplicatePhones, signals);
     }, 120);
   }
 }

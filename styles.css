@@ -618,6 +618,72 @@ h1 {
   text-transform: uppercase;
 }
 
+.duplicate-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 10, 18, 0.78);
+}
+
+.duplicate-modal {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 26px;
+  border: 3px solid var(--warning);
+  border-radius: 10px;
+  background: #101722;
+  color: var(--text);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+}
+
+.duplicate-modal strong {
+  color: var(--warning);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.duplicate-modal p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.duplicate-modal ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.duplicate-modal li {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(255, 207, 90, 0.14);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.duplicate-modal button {
+  justify-self: end;
+  min-width: 120px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--warning);
+  color: #101318;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .mobile-label {
   display: none;
   color: var(--muted);
