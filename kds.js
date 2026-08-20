@@ -256,18 +256,24 @@ function formatDuplicatePhone(phone) {
   return phone;
 }
 
-function duplicatePopupMessage(phones, signals) {
-  return phones.map((phone) => {
-    const count = signals.phones.get(phone) || 0;
-    return `${formatDuplicatePhone(phone)} - ${count} pedidos`;
-  });
+function duplicateOrderLabel(order) {
+  return `#${order.number || "--"} - ${order.customer || "Cliente"}`;
+}
+
+function duplicatePopupMessage(phones, sourceOrders) {
+  return phones.flatMap((phone) =>
+    sourceOrders
+      .filter((order) => normalizePhone(order.phone) === phone)
+      .sort((left, right) => Number(left.number || 0) - Number(right.number || 0))
+      .map(duplicateOrderLabel)
+  );
 }
 
 function duplicateGroupKey(phone, signals) {
   return `${phone}:${signals.phones.get(phone) || 0}`;
 }
 
-function showDuplicatePopup(phones, signals) {
+function showDuplicatePopup(phones, signals, sourceOrders) {
   if (duplicatePopupOpen || phones.length === 0) {
     return;
   }
@@ -278,9 +284,9 @@ function showDuplicatePopup(phones, signals) {
   overlay.innerHTML = `
     <section class="duplicate-modal" role="alertdialog" aria-modal="true" aria-label="Possivel pedido duplicado">
       <strong>Possivel pedido duplicado</strong>
-      <p>Mesmo telefone encontrado:</p>
+      <p>Pedidos com o mesmo telefone:</p>
       <ul>
-        ${duplicatePopupMessage(phones, signals).map((line) => `<li>${line}</li>`).join("")}
+        ${duplicatePopupMessage(phones, sourceOrders).map((line) => `<li>${line}</li>`).join("")}
       </ul>
       <button type="button">OK</button>
     </section>
@@ -376,7 +382,7 @@ function handleDuplicateAlerts(sourceOrders, signals) {
   if (newDuplicatePhones.length > 0) {
     playDuplicateAlertSound();
     window.setTimeout(() => {
-      showDuplicatePopup(newDuplicatePhones, signals);
+      showDuplicatePopup(newDuplicatePhones, signals, sourceOrders);
     }, 120);
   }
 }

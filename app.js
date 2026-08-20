@@ -86,6 +86,10 @@ const acknowledgedCriticalLateKeys = new Set();
 let duplicatePopupOpen = false;
 let criticalLatePopupOpen = false;
 
+function isAlertModalOpen() {
+  return duplicatePopupOpen || criticalLatePopupOpen || Boolean(document.querySelector(".duplicate-modal-overlay"));
+}
+
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
 }
@@ -211,7 +215,7 @@ function doubleLateAlertKey(order) {
 }
 
 function showDoubleLatePopup(lateOrders) {
-  if (criticalLatePopupOpen || lateOrders.length === 0) {
+  if (isAlertModalOpen() || lateOrders.length === 0) {
     return;
   }
 
@@ -252,11 +256,9 @@ function handleDoubleLateAlerts(activeOrders) {
     }
   });
 
-  if (newDoubleLateOrders.length > 0 && !criticalLatePopupOpen) {
+  if (newDoubleLateOrders.length > 0 && !isAlertModalOpen()) {
     playLateAlertSound();
-    window.setTimeout(() => {
-      showDoubleLatePopup(newDoubleLateOrders);
-    }, 120);
+    showDoubleLatePopup(newDoubleLateOrders);
   }
 }
 
@@ -364,19 +366,25 @@ function formatDuplicatePhone(phone) {
   return phone;
 }
 
-function duplicatePopupMessage(phones, signals) {
-  return phones.map((phone) => {
-    const count = signals.phones.get(phone) || 0;
-    return `${formatDuplicatePhone(phone)} - ${count} pedidos`;
-  });
+function duplicateOrderLabel(order) {
+  return `#${order.number || "--"} - ${order.customer || "Cliente"}`;
+}
+
+function duplicatePopupMessage(phones, sourceOrders) {
+  return phones.flatMap((phone) =>
+    sourceOrders
+      .filter((order) => normalizePhone(order.phone) === phone)
+      .sort((left, right) => orderSortValue(left) - orderSortValue(right))
+      .map(duplicateOrderLabel)
+  );
 }
 
 function duplicateGroupKey(phone, signals) {
   return `${phone}:${signals.phones.get(phone) || 0}`;
 }
 
-function showDuplicatePopup(phones, signals) {
-  if (duplicatePopupOpen || phones.length === 0) {
+function showDuplicatePopup(phones, signals, sourceOrders) {
+  if (isAlertModalOpen() || phones.length === 0) {
     return;
   }
 
@@ -386,9 +394,9 @@ function showDuplicatePopup(phones, signals) {
   overlay.innerHTML = `
     <section class="duplicate-modal" role="alertdialog" aria-modal="true" aria-label="Possivel pedido duplicado">
       <strong>Possivel pedido duplicado</strong>
-      <p>Mesmo telefone encontrado:</p>
+      <p>Pedidos com o mesmo telefone:</p>
       <ul>
-        ${duplicatePopupMessage(phones, signals).map((line) => `<li>${line}</li>`).join("")}
+        ${duplicatePopupMessage(phones, sourceOrders).map((line) => `<li>${line}</li>`).join("")}
       </ul>
       <button type="button">OK</button>
     </section>
@@ -435,11 +443,9 @@ function handleDuplicateAlerts(sourceOrders, signals) {
     }
   });
 
-  if (newDuplicatePhones.length > 0 && !duplicatePopupOpen) {
+  if (newDuplicatePhones.length > 0 && !isAlertModalOpen()) {
     playDuplicateAlertSound();
-    window.setTimeout(() => {
-      showDuplicatePopup(newDuplicatePhones, signals);
-    }, 120);
+    showDuplicatePopup(newDuplicatePhones, signals, sourceOrders);
   }
 }
 
