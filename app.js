@@ -82,7 +82,9 @@ let lateAlertSoundEnabled = localStorage.getItem(LATE_ALERT_SOUND_KEY) !== "fals
 let lateAlertAudioContext = null;
 let previousLateOrderKeys = null;
 const acknowledgedDuplicateGroupKeys = new Set();
+const acknowledgedCriticalLateKeys = new Set();
 let duplicatePopupOpen = false;
+let criticalLatePopupOpen = false;
 
 function elapsedMinutes(order) {
   return Math.floor((Date.now() - Number(order.arrivedAt)) / 60000);
@@ -116,6 +118,10 @@ function lateLimitForOrder(order) {
 
 function isLate(order) {
   return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order);
+}
+
+function isDoubleLate(order) {
+  return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order) * 2;
 }
 
 function alertKeyForOrder(order) {
@@ -197,6 +203,60 @@ function handleLateAlerts(lateOrders) {
 
   if (hasNewLateOrder) {
     playLateAlertSound();
+  }
+}
+
+function doubleLateAlertKey(order) {
+  return `${alertKeyForOrder(order)}:${lateLimitForOrder(order)}`;
+}
+
+function showDoubleLatePopup(lateOrders) {
+  if (criticalLatePopupOpen || lateOrders.length === 0) {
+    return;
+  }
+
+  criticalLatePopupOpen = true;
+  const overlay = document.createElement("div");
+  overlay.className = "duplicate-modal-overlay";
+  overlay.innerHTML = `
+    <section class="duplicate-modal late-modal" role="alertdialog" aria-modal="true" aria-label="Pedido muito atrasado">
+      <strong>Pedido muito atrasado</strong>
+      <p>Pedido passou do dobro do tempo configurado:</p>
+      <ul>
+        ${lateOrders.map((order) => `
+          <li>#${order.number} - ${order.customer || "Cliente"} - ${elapsedMinutes(order)} min</li>
+        `).join("")}
+      </ul>
+      <button type="button">OK</button>
+    </section>
+  `;
+
+  overlay.querySelector("button").addEventListener("click", () => {
+    lateOrders.forEach((order) => acknowledgedCriticalLateKeys.add(doubleLateAlertKey(order)));
+    criticalLatePopupOpen = false;
+    overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+  overlay.querySelector("button").focus();
+}
+
+function handleDoubleLateAlerts(activeOrders) {
+  const doubleLateOrders = activeOrders.filter(isDoubleLate);
+  const currentDoubleLateKeys = new Set(doubleLateOrders.map(doubleLateAlertKey));
+  const newDoubleLateOrders = doubleLateOrders.filter((order) => !acknowledgedCriticalLateKeys.has(doubleLateAlertKey(order)));
+
+  [...acknowledgedCriticalLateKeys].forEach((key) => {
+    if (!currentDoubleLateKeys.has(key)) {
+      acknowledgedCriticalLateKeys.delete(key);
+    }
+  });
+
+  if (newDoubleLateOrders.length > 0 && !criticalLatePopupOpen) {
+    playLateAlertSound();
+    window.setTimeout(() => {
+      showDoubleLatePopup(newDoubleLateOrders);
+    }, 120);
   }
 }
 
@@ -375,7 +435,7 @@ function handleDuplicateAlerts(sourceOrders, signals) {
     }
   });
 
-  if (newDuplicatePhones.length > 0) {
+  if (newDuplicatePhones.length > 0 && !duplicatePopupOpen) {
     playDuplicateAlertSound();
     window.setTimeout(() => {
       showDuplicatePopup(newDuplicatePhones, signals);
@@ -502,6 +562,7 @@ function renderOrders() {
   lateCount.textContent = String(lateOrders.length);
   updateMetricsBar(activeOrders);
   handleLateAlerts(lateOrders);
+  handleDoubleLateAlerts(activeOrders);
   if (footerUpdated) {
     footerUpdated.textContent = new Date().toLocaleTimeString("pt-BR", {
       timeZone: APP_TIME_ZONE,

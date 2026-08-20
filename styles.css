@@ -684,6 +684,23 @@ h1 {
   cursor: pointer;
 }
 
+.late-modal {
+  border-color: var(--critical);
+}
+
+.late-modal strong {
+  color: #ff5b5b;
+}
+
+.late-modal li {
+  background: rgba(255, 47, 47, 0.18);
+}
+
+.late-modal button {
+  background: var(--critical);
+  color: #ffffff;
+}
+
 .mobile-label {
   display: none;
   color: var(--muted);
