@@ -18,12 +18,13 @@ const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_API_KEY = process.env.CARDAPIO_API_KEY || "";
 const CARDAPIO_PARTNER_KEY = process.env.CARDAPIO_PARTNER_KEY || "";
+const CARDAPIO_ACCESS_TOKEN = process.env.CARDAPIO_ACCESS_TOKEN || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
 const CARDAPIO_READY_ENDPOINT_TEMPLATE =
-  process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "{orderURL}/readyForPickup";
+  process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "{partnerOrdersURL}/{orderId}/prepared";
 const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
-  "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
+  "https://integracao.cardapioweb.com/api/partner/v1/orders";
 const CARDAPIO_PARTNER_ORDERS_URL =
   process.env.CARDAPIO_PARTNER_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/partner/v1/orders";
@@ -52,7 +53,7 @@ const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
 const PANEL_PASSWORD = process.env.PANEL_PASSWORD || "qualidade123";
 const PANEL_SESSION_SECRET =
   process.env.PANEL_SESSION_SECRET || CARDAPIO_CLIENT_SECRET || PANEL_PASSWORD;
-const PANEL_AUTH_COOKIE = "laqualite_auth";
+const PANEL_AUTH_COOKIE = "expedition_panel_auth";
 const PANEL_AUTH_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 let cachedToken = null;
@@ -727,6 +728,12 @@ function cardapioOrderUrl(order) {
   return `${CARDAPIO_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(order.orderId || order.number)}`;
 }
 
+function cardapioPartnerOrderUrl(order) {
+  return `${CARDAPIO_PARTNER_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(
+    order.orderId || order.number
+  )}`;
+}
+
 async function notifyCardapioOrderReady(order) {
   if (String(order.orderId || "").startsWith("teste-")) {
     return {
@@ -737,19 +744,17 @@ async function notifyCardapioOrderReady(order) {
     };
   }
 
-  const orderURL = cardapioOrderUrl(order);
+  const orderURL = cardapioPartnerOrderUrl(order);
   const readyURL = CARDAPIO_READY_ENDPOINT_TEMPLATE
     .replace("{orderId}", encodeURIComponent(order.orderId || order.number))
-    .replace("{orderURL}", orderURL.replace(/\/$/, ""));
-  const token = await getCardapioToken(orderURL);
+    .replace("{orderURL}", orderURL.replace(/\/$/, ""))
+    .replace("{partnerOrdersURL}", CARDAPIO_PARTNER_ORDERS_URL.replace(/\/$/, ""));
   const response = await fetch(readyURL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...cardapioPartnerHeaders(),
       Accept: "application/json",
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -1058,8 +1063,8 @@ function removeKdsReadyOrder(order) {
 }
 
 function cardapioStatusUrl(order, statusAction) {
-  const orderURL = cardapioOrderUrl(order).replace(/\/$/, "");
-  const endpoint = statusAction === "pickup-ready" ? "readyForPickup" : "dispatch";
+  const orderURL = cardapioPartnerOrderUrl(order).replace(/\/$/, "");
+  const endpoint = statusAction === "pickup-ready" ? "prepared" : "dispatch";
 
   return `${orderURL}/${endpoint}`;
 }
@@ -1076,15 +1081,12 @@ async function notifyCardapioDispatch(order, action) {
   }
 
   const statusURL = cardapioStatusUrl(order, action);
-  const token = await getCardapioToken(statusURL);
   const response = await fetch(statusURL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...cardapioPartnerHeaders(),
       Accept: "application/json",
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -1349,7 +1351,7 @@ function serveLoginPage(response, { invalid = false } = {}) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Acesso La Qualite</title>
+    <title>Acesso ao Painel</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
@@ -1423,7 +1425,7 @@ function serveLoginPage(response, { invalid = false } = {}) {
   <body>
     <form id="login-form">
       <div>
-        <span>La Qualite Delivery</span>
+        <span>Painel de Expedição</span>
         <h1>Acesso ao painel</h1>
       </div>
       <label>
@@ -2311,6 +2313,7 @@ function tokenUrlsFromOrderUrl(orderURL) {
   const baseWithoutVersion = orderBaseUrl.replace(/\/v\d+$/, "");
 
   return [
+    `${origin}/api/partner/oauth/token`,
     `${origin}/oauth/token`,
     `${origin}/api/oauth/token`,
     `${orderBaseUrl}/oauth/token`,
@@ -2321,6 +2324,10 @@ function tokenUrlsFromOrderUrl(orderURL) {
 }
 
 async function getCardapioToken(orderURL) {
+  if (CARDAPIO_ACCESS_TOKEN) {
+    return CARDAPIO_ACCESS_TOKEN;
+  }
+
   if (!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) {
     throw new Error("Credenciais do Cardapio Web nao configuradas no Render.");
   }
@@ -2507,10 +2514,13 @@ function cardapioPartnerApiKey() {
 }
 
 function cardapioPartnerHeaders() {
-  const headers = {
-    Accept: "application/json",
-    "X-API-KEY": cardapioPartnerApiKey(),
-  };
+  const headers = { Accept: "application/json" };
+
+  if (CARDAPIO_ACCESS_TOKEN) {
+    headers.Authorization = `Bearer ${CARDAPIO_ACCESS_TOKEN}`;
+  } else if (cardapioPartnerApiKey()) {
+    headers["X-API-KEY"] = cardapioPartnerApiKey();
+  }
 
   if (CARDAPIO_PARTNER_KEY) {
     headers["X-PARTNER-KEY"] = CARDAPIO_PARTNER_KEY;
@@ -2522,8 +2532,10 @@ function cardapioPartnerHeaders() {
 async function fetchCardapioPartnerJson(url, options = {}) {
   const apiKey = cardapioPartnerApiKey();
 
-  if (!apiKey) {
-    throw new Error("CARDAPIO_API_KEY nao configurado no Render.");
+  if (!apiKey && !CARDAPIO_ACCESS_TOKEN) {
+    throw new Error(
+      "Autenticacao Cardapio Web nao configurada. Informe CARDAPIO_ACCESS_TOKEN ou CARDAPIO_API_KEY."
+    );
   }
 
   const response = await fetch(url, {
@@ -4154,7 +4166,7 @@ const server = http.createServer(async (request, response) => {
 
   if (
     !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/dispatch-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
-    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/logo-la-qualite.png", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
+    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
   ) {

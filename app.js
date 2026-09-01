@@ -264,7 +264,6 @@ function showBrowserNotification(title, body, tag) {
 
   const notification = new Notification(title, {
     body,
-    icon: "/logo-la-qualite.png",
     tag,
   });
 
@@ -288,7 +287,7 @@ async function requestBrowserNotifications() {
     showBrowserNotification(
       "Alertas ativados",
       "O Painel de Expedição avisará sobre atrasos e possíveis pedidos duplicados.",
-      "laqualite-notifications-enabled"
+      "expedition-notifications-enabled"
     );
     return true;
   }
@@ -348,7 +347,7 @@ function handleLateAlerts(lateOrders) {
     showBrowserNotification(
       newLateOrders.length === 1 ? "Pedido atrasado" : `${newLateOrders.length} pedidos atrasados`,
       newLateOrders.map((order) => `#${order.number} - ${order.customer || "Cliente"}`).join(" | "),
-      `laqualite-late-${newLateOrders.map(alertKeyForOrder).join("-")}`
+      `expedition-late-${newLateOrders.map(alertKeyForOrder).join("-")}`
     );
   }
 }
@@ -591,7 +590,7 @@ function handleDuplicateAlerts(sourceOrders, signals) {
     showBrowserNotification(
       "Possível pedido duplicado",
       duplicatePopupMessage(newDuplicatePhones, sourceOrders).join(" | "),
-      `laqualite-duplicate-${newDuplicatePhones.join("-")}`
+      `expedition-duplicate-${newDuplicatePhones.join("-")}`
     );
     showDuplicatePopup(newDuplicatePhones, signals, sourceOrders);
   }
