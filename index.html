@@ -14,78 +14,76 @@
         </div>
 
         <nav class="tabs" aria-label="Filtro de pedidos">
-          <button class="tab active" type="button" data-filter="all">
-            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="4" y="4" width="6" height="6" rx="1.5"></rect>
-              <rect x="14" y="4" width="6" height="6" rx="1.5"></rect>
-              <rect x="4" y="14" width="6" height="6" rx="1.5"></rect>
-              <rect x="14" y="14" width="6" height="6" rx="1.5"></rect>
-            </svg>
-            Todos
-          </button>
-          <button class="tab" type="button" data-filter="delivery">
-            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="7" cy="17" r="2"></circle>
-              <circle cx="17" cy="17" r="2"></circle>
-              <path d="M5 17h2l3-7h4l2 4h3"></path>
-              <path d="M11 10l-2-3"></path>
-              <path d="M13 10l2-3"></path>
-              <path d="M8 13h7"></path>
-            </svg>
-            Entregas
-          </button>
-          <button class="tab" type="button" data-filter="pickup">
-            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 8h12l1 12H5L6 8Z"></path>
-              <path d="M9 8a3 3 0 0 1 6 0"></path>
-            </svg>
-            Retirada
-          </button>
-          <button class="tab" type="button" data-filter="late">
-            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 4 21 20H3L12 4Z"></path>
-              <path d="M12 9v5"></path>
-              <path d="M12 17h.01"></path>
-            </svg>
-            Atrasados
-          </button>
-          <button class="tab" type="button" data-filter="dispatched">
-            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="m8 12 3 3 5-6"></path>
-            </svg>
-            Despachados
-          </button>
-          <div class="config-menu">
-            <button class="tab config-toggle" id="config-toggle" type="button" aria-expanded="false">
+          <div class="primary-tabs" aria-label="Fluxo da expedição">
+            <button class="tab active" id="preparation-tab" type="button" data-filter="all">
               <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a8 8 0 0 0 .1-1 8 8 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.8-1L15 5h-6l-.2 3a7 7 0 0 0-1.8 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0-.1 1 8 8 0 0 0 .1 1l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 1.8 1L9 23h6l.2-3a7 7 0 0 0 1.8-1l2.4 1 2-3.5L19.4 15Z"></path>
+                <path d="M5 5h14v14H5z"></path>
+                <path d="M8 9h8M8 13h8M8 17h5"></path>
               </svg>
-              Configurações
+              Pedidos
             </button>
-            <div class="config-options" id="config-options" hidden>
-              <button class="tab config-option" type="button" data-filter="settings">Tempo</button>
-              <button class="tab config-option" type="button" data-filter="monitor">Monitoramento</button>
-              <button class="tab config-option" type="button" data-filter="events">Eventos</button>
-            </div>
+            <button class="tab" type="button" data-filter="dispatch">
+              <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="7" cy="17" r="2"></circle>
+                <circle cx="17" cy="17" r="2"></circle>
+                <path d="M5 17h2l3-7h4l2 4h3"></path>
+                <path d="m15 7 2 2 4-4"></path>
+              </svg>
+              Modo de Despacho
+            </button>
+            <button class="tab" type="button" data-filter="dispatched">
+              <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="m8 12 3 3 5-6"></path>
+              </svg>
+              Despachados
+            </button>
           </div>
-          <button class="tab fullscreen-tab" id="fullscreen-button" type="button">
-            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 3H3v5"></path>
-              <path d="M16 3h5v5"></path>
-              <path d="M8 21H3v-5"></path>
-              <path d="M16 21h5v-5"></path>
-            </svg>
-            Tela cheia
-          </button>
+
+          <div class="header-tools">
+            <div class="config-menu">
+              <button class="tab config-toggle" id="config-toggle" type="button" aria-expanded="false">
+                <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a8 8 0 0 0 .1-1 8 8 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.8-1L15 5h-6l-.2 3a7 7 0 0 0-1.8 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0-.1 1 8 8 0 0 0 .1 1l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 1.8 1L9 23h6l.2-3a7 7 0 0 0 1.8-1l2.4 1 2-3.5L19.4 15Z"></path>
+                </svg>
+                Configurações
+              </button>
+              <div class="config-options" id="config-options" hidden>
+                <button class="tab config-option" type="button" data-filter="settings">Tempo</button>
+                <button class="tab config-option" type="button" data-filter="monitor">Monitoramento</button>
+                <button class="tab config-option" type="button" data-filter="events">Eventos</button>
+              </div>
+            </div>
+            <button class="tab fullscreen-tab" id="fullscreen-button" type="button">
+              <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 3H3v5"></path>
+                <path d="M16 3h5v5"></path>
+                <path d="M8 21H3v-5"></path>
+                <path d="M16 21h5v-5"></path>
+              </svg>
+              Tela cheia
+            </button>
+          </div>
         </nav>
       </header>
 
-      <section class="order-metrics-bar" aria-label="Resumo rapido dos pedidos">
+      <nav class="preparation-filters" id="preparation-filters" aria-label="Filtros dos pedidos em preparo">
+        <span>Visualizar</span>
+        <button class="tab prep-filter active" type="button" data-filter="all">Todos</button>
+        <button class="tab prep-filter" type="button" data-filter="delivery">Entregas</button>
+        <button class="tab prep-filter" type="button" data-filter="pickup">Retiradas</button>
+        <button class="tab prep-filter danger" type="button" data-filter="late">Atrasados</button>
+      </nav>
+
+      <section class="order-metrics-bar" id="order-metrics-bar" aria-label="Resumo rapido dos pedidos">
         <div class="metric-pill preparing">
           <span id="preparing-label">Pedidos em preparo</span>
           <strong id="preparing-count">0</strong>
+        </div>
+        <div class="metric-pill ready">
+          <span id="ready-label">Pedidos prontos</span>
+          <strong id="ready-count">0</strong>
         </div>
         <div class="metric-pill dispatched">
           <span id="dispatched-label">Pedidos despachados</span>
@@ -97,21 +95,7 @@
         </div>
       </section>
 
-      <section class="summary" aria-label="Resumo dos pedidos">
-        <div class="summary-item">
-          <div class="summary-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M6 8h12l1 12H5L6 8Z"></path>
-              <path d="M9 8a3 3 0 0 1 6 0"></path>
-            </svg>
-          </div>
-          <div class="summary-copy">
-            <span>Pedidos na loja</span>
-            <strong id="total-count">0</strong>
-            <small>Aguardando preparo e despacho</small>
-          </div>
-          <div class="summary-art store-art"></div>
-        </div>
+      <section class="summary" id="orders-summary" aria-label="Resumo dos pedidos">
         <div class="summary-item danger">
           <div class="summary-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -120,7 +104,6 @@
             </svg>
           </div>
           <div class="summary-copy">
-            <span>Atrasados</span>
             <strong id="late-count">0</strong>
             <small>Pedidos com atraso no tempo estimado</small>
           </div>
@@ -158,6 +141,14 @@
             <span>Som quando pedido atrasar</span>
           </label>
           <button id="late-alert-test" type="button">Testar som</button>
+        </div>
+
+        <div class="browser-notification-control" aria-label="Notificações do navegador">
+          <div>
+            <span>Notificações do navegador</span>
+            <small id="browser-notification-status">Verificando permissão...</small>
+          </div>
+          <button id="browser-notification-enable" type="button">Ativar notificações</button>
         </div>
       </section>
 
@@ -234,10 +225,38 @@
 
       <section class="events-panel" id="events-panel" aria-label="Eventos recebidos" hidden>
         <div class="events-head">
-          <span>Ultimos eventos recebidos do Cardapio Web</span>
+          <span>Eventos do sistema e do Cardápio Web</span>
           <strong id="events-count">0</strong>
         </div>
         <div class="events-list" id="events-list"></div>
+      </section>
+
+      <section class="dispatch-panel" id="dispatch-panel" aria-label="Despacho de pedidos" hidden>
+        <div class="dispatch-toolbar">
+          <div class="dispatch-toolbar-copy">
+            <span>Despacho de entregas</span>
+            <strong><span id="dispatch-selected-count">0</span> pedido(s) selecionado(s)</strong>
+          </div>
+          <label class="dispatch-driver-control">
+            <span>Motoboy</span>
+            <select id="dispatch-driver-select">
+              <option value="">Selecione o motoboy</option>
+            </select>
+          </label>
+          <button id="dispatch-select-all" type="button">Selecionar todos</button>
+          <button id="dispatch-confirm" type="button" disabled>Despachar selecionados</button>
+        </div>
+        <div class="dispatch-feedback" id="dispatch-feedback" role="status" hidden></div>
+        <div class="dispatch-orders-head">
+          <span>Selecionar</span>
+          <span>Pedido</span>
+          <span>Cliente</span>
+          <span>Bairro</span>
+          <span>Cidade</span>
+          <span>Tempo na loja</span>
+          <span>Prazo</span>
+        </div>
+        <div class="dispatch-order-list" id="dispatch-order-list"></div>
       </section>
 
       <section class="orders" id="dispatched-panel" aria-label="Pedidos despachados" hidden>

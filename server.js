@@ -35,7 +35,7 @@ const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVA
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const HIDE_TEST_ORDERS =
   Boolean(process.env.RENDER) || process.env.HIDE_TEST_ORDERS === "true";
-const MAX_EVENTS_STORED = Number(process.env.MAX_EVENTS_STORED) || 12;
+const MAX_EVENTS_STORED = Number(process.env.MAX_EVENTS_STORED) || 200;
 const MAX_DISPATCHED_STORED = Number(process.env.MAX_DISPATCHED_STORED) || 80;
 const MAX_READY_STORED = Number(process.env.MAX_READY_STORED) || 120;
 const MAX_UPDATE_CLIENTS = Number(process.env.MAX_UPDATE_CLIENTS) || 20;
@@ -45,7 +45,7 @@ const MAX_EVENT_LOG_TEXT = Number(process.env.MAX_EVENT_LOG_TEXT) || 700;
 const MAX_EVENT_LOG_KEYS = Number(process.env.MAX_EVENT_LOG_KEYS) || 24;
 const MEMORY_GC_THRESHOLD_MB = Number(process.env.MEMORY_GC_THRESHOLD_MB) || 360;
 const MEMORY_FORCE_COMPACT_THRESHOLD_MB = Number(process.env.MEMORY_FORCE_COMPACT_THRESHOLD_MB) || 430;
-const ENABLE_KDS = process.env.ENABLE_KDS !== "false";
+const ENABLE_KDS = process.env.ENABLE_KDS === "true";
 // Reativacao futura: incluir "esfihas" e "porcoes" aqui para voltar esses setores ao nosso KDS de producao.
 const ACTIVE_PRODUCTION_KDS_SECTORS = new Set(["pizzas"]);
 const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
@@ -209,6 +209,7 @@ function compactStorageData(key, data) {
         !demoOrderNumbers.has(String(order.number)) &&
         order.orderId &&
         order.orderId !== order.number &&
+        !isAwaitingPaymentOrder(order) &&
         shouldShowWorkdayOrder(order)
       )
       .slice(0, 300);
@@ -1262,12 +1263,12 @@ function recordEvent(request, body, result) {
   console.log("Webhook recebido:", JSON.stringify(eventRecord));
 }
 
-function recordSystemEvent(body, result) {
+function recordSystemEvent(body, result, eventPath = "/sync-open-orders") {
   const events = readEvents();
   const eventRecord = {
     receivedAt: formatLocalDateTime(),
     method: "SYSTEM",
-    path: "/sync-open-orders",
+    path: eventPath,
     result: compactEventRecord(result),
     body: compactEventRecord(body),
   };
@@ -1275,7 +1276,7 @@ function recordSystemEvent(body, result) {
   events.unshift(eventRecord);
 
   writeEvents(events);
-  console.log("Sincronizacao:", JSON.stringify(eventRecord));
+  console.log("Evento do sistema:", JSON.stringify(eventRecord));
 }
 
 function sendJson(response, statusCode, data) {
@@ -2580,6 +2581,10 @@ function partnerOrderId(order) {
 function partnerOrderStatusKind(order) {
   const status = String(getDeepValue(order, ["status", "orderStatus", "situacao"]) || "").toLowerCase();
 
+  if (isAwaitingPaymentOrder(order)) {
+    return "awaiting-payment";
+  }
+
   if (status === "released") {
     return "dispatched";
   }
@@ -2620,6 +2625,16 @@ async function syncPartnerModifiedOrders() {
 
       try {
         const statusKind = partnerOrderStatusKind(changedOrder);
+
+        if (statusKind === "awaiting-payment") {
+          const pendingOrder = normalizeOrder(changedOrder) || { orderId, number: orderId };
+          writeOrders(readOrders().filter((order) => !isSameOrder(order, pendingOrder)));
+          if (ENABLE_KDS) {
+            removeKdsReadyOrder(pendingOrder);
+          }
+          processedOrders.push(orderId);
+          continue;
+        }
 
         if (statusKind === "closed") {
           const normalized = normalizeOrder(changedOrder) || { orderId, number: orderId };
@@ -3254,6 +3269,150 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
+async function dispatchPanelOrder(target, driver) {
+  return withOrderLock(target, async () => {
+    const orders = readOrders();
+    const orderIndex = orders.findIndex((item) => isSameOrder(item, target));
+    const order = orders[orderIndex];
+
+    if (!order) {
+      const result = {
+        ok: false,
+        action: "panel-dispatch-order-not-found",
+        order: target.number || "",
+        orderId: target.orderId || "",
+        message: "Pedido nao encontrado na lista ativa.",
+      };
+      recordSystemEvent({ source: "panel-dispatch", target, driver }, result, "/api/dispatch-orders");
+      return result;
+    }
+
+    if (order.fulfillmentType === "pickup") {
+      const result = {
+        ok: false,
+        action: "panel-dispatch-pickup-blocked",
+        order: order.number,
+        orderId: order.orderId,
+        message: "Pedidos de retirada nao podem ser enviados para um motoboy.",
+      };
+      recordSystemEvent({ source: "panel-dispatch", driver }, result, "/api/dispatch-orders");
+      return result;
+    }
+
+    const cardapioResult = await notifyCardapioDispatchSafely(order, "dispatch");
+    const eventBody = {
+      source: "panel-dispatch",
+      order: order.number,
+      orderId: order.orderId,
+      orderURL: cardapioOrderUrl(order),
+      driverId: driver.id,
+      driverName: driver.name,
+    };
+
+    if (!cardapioResult.ok) {
+      const result = {
+        ok: false,
+        action: "panel-dispatch-failed",
+        order: order.number,
+        orderId: order.orderId,
+        message: cardapioResult.message || "Nao foi possivel despachar no Cardapio Web.",
+        cardapio: cardapioResult,
+      };
+      recordSystemEvent(eventBody, result, "/api/dispatch-orders");
+      return result;
+    }
+
+    orders.splice(orderIndex, 1);
+    writeOrders(orders);
+    if (ENABLE_KDS) {
+      removeKdsReadyOrder(order);
+    }
+    recordDispatchedOrder(order, { action: "dispatch", eventType: "DISPATCHED", driver });
+
+    const result = {
+      ok: true,
+      action: "panel-dispatched",
+      order: order.number,
+      orderId: order.orderId,
+      driverName: driver.name,
+      cardapio: cardapioResult,
+    };
+    recordSystemEvent(eventBody, result, "/api/dispatch-orders");
+    return result;
+  });
+}
+
+async function dispatchPanelOrders(payload) {
+  const driver = driverFromPayload(payload);
+  const targets = Array.isArray(payload.orders) ? payload.orders.slice(0, 50) : [];
+
+  if (!driver) {
+    const result = { ok: false, action: "panel-dispatch-invalid-driver", message: "Selecione um motoboy." };
+    recordSystemEvent({ source: "panel-dispatch", orderCount: targets.length }, result, "/api/dispatch-orders");
+    return result;
+  }
+
+  if (!targets.length) {
+    const result = { ok: false, action: "panel-dispatch-empty", message: "Selecione pelo menos um pedido." };
+    recordSystemEvent({ source: "panel-dispatch", driver }, result, "/api/dispatch-orders");
+    return result;
+  }
+
+  const results = [];
+  for (const target of targets) {
+    results.push(await dispatchPanelOrder(target, driver));
+  }
+
+  const succeeded = results.filter((result) => result.ok).length;
+  const failed = results.length - succeeded;
+
+  return {
+    ok: failed === 0,
+    action: failed ? "panel-dispatch-partial" : "panel-dispatch-completed",
+    count: results.length,
+    succeeded,
+    failed,
+    results,
+  };
+}
+
+function isAwaitingPaymentOrder(source) {
+  const statusText = normalizeText(getDeepValue(source, [
+    "rawStatus",
+    "status",
+    "orderStatus",
+    "situacao",
+  ]));
+  const paymentStatusText = normalizeText([
+    getDeepValue(source, [
+      "payment.status",
+      "paymentStatus",
+      "payment.statusDescription",
+      "payment.description",
+      "payments.0.status",
+    ]),
+    findValueByKeyNames(source, ["paymentStatus", "statusPagamento", "situacaoPagamento"]),
+  ].filter(Boolean).join(" "));
+  const combinedStatusText = `${statusText} ${paymentStatusText}`;
+
+  const hasAwaitingPaymentStatus = [
+    "awaiting_payment",
+    "awaiting payment",
+    "waiting_payment",
+    "waiting payment",
+    "pending_payment",
+    "pending payment",
+    "payment_pending",
+    "payment pending",
+    "aguardando_pagamento",
+    "aguardando pagamento",
+    "pagamento_pendente",
+    "pagamento pendente",
+  ].some((status) => combinedStatusText.includes(status));
+
+  return hasAwaitingPaymentStatus || ["pending", "awaiting", "waiting"].includes(paymentStatusText);
+}
+
 function itemSearchText(item) {
   const complements = (item.complements || [])
     .map((complement) => `${complement.name || ""} ${complement.category || ""} ${(complement.pdvCodes || []).join(" ")} ${(complement.categoryIds || []).join(" ")} ${complement.searchText || ""}`)
@@ -3798,6 +3957,22 @@ async function handleWebhook(payload) {
     order.number === String(payload.orderId || "")
   );
 
+  if (isAwaitingPaymentOrder(payloadForOrder) || isAwaitingPaymentOrder(normalizedOrder)) {
+    if (currentIndex >= 0) {
+      const pendingOrder = orders.splice(currentIndex, 1)[0];
+      writeOrders(orders);
+      if (ENABLE_KDS) {
+        removeKdsReadyOrder(pendingOrder);
+      }
+    }
+
+    return {
+      ok: true,
+      action: "awaiting-payment-ignored",
+      order: normalizedOrder.number,
+    };
+  }
+
   const removalKind = webhookRemovalKind || removalEventKind({ ...payload, ...payloadForOrder }, normalizedOrder);
 
   if (removalKind) {
@@ -3978,7 +4153,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (
-    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
+    !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/dispatch-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
     !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/logo-la-qualite.png", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
@@ -4068,17 +4243,37 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/production-summary") {
-    sendJson(response, 200, buildProductionSummary());
+  if (request.method === "POST" && url.pathname === "/api/dispatch-orders") {
+    try {
+      const body = await readBody(request);
+      const result = await dispatchPanelOrders(body);
+      sendJson(response, result.ok ? 200 : result.succeeded > 0 ? 207 : 400, result);
+    } catch (error) {
+      const result = {
+        ok: false,
+        action: "panel-dispatch-request-failed",
+        message: error.message || "Falha inesperada ao processar o despacho.",
+      };
+      recordSystemEvent({ source: "panel-dispatch" }, result, "/api/dispatch-orders");
+      sendJson(response, 500, result);
+    }
     return;
   }
 
-  if (!ENABLE_KDS && url.pathname.startsWith("/api/kds")) {
+  if (
+    !ENABLE_KDS &&
+    (url.pathname.startsWith("/api/kds") || url.pathname === "/api/production-summary")
+  ) {
     sendJson(response, 503, {
       ok: false,
       action: "kds-paused",
       message: "KDS pausado. Operacao atual focada somente no Painel de Expedicao.",
     });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/production-summary") {
+    sendJson(response, 200, buildProductionSummary());
     return;
   }
 

@@ -15,10 +15,28 @@ let pickupLateLimitMinutes = Number.isFinite(savedPickupLateLimit) && savedPicku
 let orders = [];
 let dispatchedOrders = [];
 let events = [];
+let drivers = [];
 let health = null;
 let monitorMessage = "";
+let dispatchMessage = "";
+let dispatchMessageState = "";
+let dispatchInFlight = false;
+const selectedDispatchOrderIds = new Set();
 
-let activeFilter = "all";
+const SAVED_PANEL_VIEW_KEY = "expeditionActiveView";
+const validPanelViews = new Set([
+  "all",
+  "delivery",
+  "pickup",
+  "late",
+  "dispatch",
+  "dispatched",
+  "settings",
+  "monitor",
+  "events",
+]);
+const savedPanelView = localStorage.getItem(SAVED_PANEL_VIEW_KEY) || "all";
+let activeFilter = validPanelViews.has(savedPanelView) ? savedPanelView : "all";
 let shouldSyncOnNextOrdersLoad = true;
 let liveRefreshTimer = null;
 
@@ -29,10 +47,22 @@ const dispatchedList = document.querySelector("#dispatched-list");
 const settingsPanel = document.querySelector("#settings-panel");
 const eventsPanel = document.querySelector("#events-panel");
 const monitorPanel = document.querySelector("#monitor-panel");
+const dispatchPanel = document.querySelector("#dispatch-panel");
+const dispatchOrderList = document.querySelector("#dispatch-order-list");
+const dispatchDriverSelect = document.querySelector("#dispatch-driver-select");
+const dispatchSelectedCount = document.querySelector("#dispatch-selected-count");
+const dispatchSelectAll = document.querySelector("#dispatch-select-all");
+const dispatchConfirm = document.querySelector("#dispatch-confirm");
+const dispatchFeedback = document.querySelector("#dispatch-feedback");
+const preparationFilters = document.querySelector("#preparation-filters");
+const orderMetricsBar = document.querySelector("#order-metrics-bar");
+const ordersSummary = document.querySelector("#orders-summary");
 const totalCount = document.querySelector("#total-count");
 const lateCount = document.querySelector("#late-count");
 const preparingLabel = document.querySelector("#preparing-label");
 const preparingCount = document.querySelector("#preparing-count");
+const readyLabel = document.querySelector("#ready-label");
+const readyCount = document.querySelector("#ready-count");
 const dispatchedLabel = document.querySelector("#dispatched-label");
 const dispatchedCount = document.querySelector("#dispatched-count");
 const grandTotalLabel = document.querySelector("#grand-total-label");
@@ -72,11 +102,14 @@ const deliveryLimitLabel = document.querySelector("#delivery-limit-label");
 const pickupLimitLabel = document.querySelector("#pickup-limit-label");
 const lateAlertToggle = document.querySelector("#late-alert-toggle");
 const lateAlertTest = document.querySelector("#late-alert-test");
+const browserNotificationEnable = document.querySelector("#browser-notification-enable");
+const browserNotificationStatus = document.querySelector("#browser-notification-status");
 const fullscreenButton = document.querySelector("#fullscreen-button");
 const footerUpdated = document.querySelector("#footer-updated");
 const footerRefresh = document.querySelector("#footer-refresh");
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const LATE_ALERT_SOUND_KEY = "lateAlertSoundEnabled";
+const NOTIFICATION_PROMPT_DISMISSED_KEY = "browserNotificationPromptDismissed";
 
 let lateAlertSoundEnabled = localStorage.getItem(LATE_ALERT_SOUND_KEY) !== "false";
 let lateAlertAudioContext = null;
@@ -104,6 +137,10 @@ function orderSortValue(order) {
   return Number.isFinite(number) ? number : Number(order.arrivedAt || 0);
 }
 
+function dispatchOrderId(order) {
+  return String(order.orderId || order.number || "");
+}
+
 function formatTimer(order) {
   const totalSeconds = elapsedSeconds(order);
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -116,16 +153,20 @@ function isPickupReady(order) {
   return isPickup(order) && (order?.externalReadyAt || order?.kdsStatus?.state === "ready");
 }
 
+function isOrderReady(order) {
+  return Boolean(order?.externalReadyAt || order?.kdsStatus?.state === "ready");
+}
+
 function lateLimitForOrder(order) {
   return isPickup(order) ? pickupLateLimitMinutes : deliveryLateLimitMinutes;
 }
 
 function isLate(order) {
-  return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order);
+  return !isOrderReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order);
 }
 
 function isDoubleLate(order) {
-  return !isPickupReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order) * 2;
+  return !isOrderReady(order) && elapsedMinutes(order) >= lateLimitForOrder(order) * 2;
 }
 
 function alertKeyForOrder(order) {
@@ -194,6 +235,103 @@ function syncLateAlertControl() {
   }
 }
 
+function browserNotificationPermission() {
+  return "Notification" in window ? Notification.permission : "unsupported";
+}
+
+function syncBrowserNotificationControl() {
+  if (!browserNotificationStatus || !browserNotificationEnable) {
+    return;
+  }
+
+  const permission = browserNotificationPermission();
+  const labels = {
+    granted: "Ativas para atrasos e possíveis duplicidades.",
+    denied: "Bloqueadas nas configurações do navegador.",
+    default: "Ainda não ativadas neste navegador.",
+    unsupported: "Este navegador não oferece notificações.",
+  };
+
+  browserNotificationStatus.textContent = labels[permission] || labels.default;
+  browserNotificationEnable.disabled = permission === "granted" || permission === "unsupported";
+  browserNotificationEnable.textContent = permission === "granted" ? "Notificações ativas" : "Ativar notificações";
+}
+
+function showBrowserNotification(title, body, tag) {
+  if (browserNotificationPermission() !== "granted") {
+    return;
+  }
+
+  const notification = new Notification(title, {
+    body,
+    icon: "/logo-la-qualite.png",
+    tag,
+  });
+
+  notification.onclick = () => {
+    window.focus();
+    notification.close();
+  };
+}
+
+async function requestBrowserNotifications() {
+  if (!("Notification" in window)) {
+    syncBrowserNotificationControl();
+    return false;
+  }
+
+  const permission = await Notification.requestPermission();
+  syncBrowserNotificationControl();
+
+  if (permission === "granted") {
+    localStorage.removeItem(NOTIFICATION_PROMPT_DISMISSED_KEY);
+    showBrowserNotification(
+      "Alertas ativados",
+      "O Painel de Expedição avisará sobre atrasos e possíveis pedidos duplicados.",
+      "laqualite-notifications-enabled"
+    );
+    return true;
+  }
+
+  localStorage.setItem(NOTIFICATION_PROMPT_DISMISSED_KEY, "true");
+  return false;
+}
+
+function showBrowserNotificationActivationPopup() {
+  if (
+    browserNotificationPermission() !== "default" ||
+    localStorage.getItem(NOTIFICATION_PROMPT_DISMISSED_KEY) === "true" ||
+    document.querySelector(".notification-activation-overlay")
+  ) {
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "duplicate-modal-overlay notification-activation-overlay";
+  overlay.innerHTML = `
+    <section class="duplicate-modal notification-activation-modal" role="dialog" aria-modal="true" aria-label="Ativar alertas do navegador">
+      <strong>Ativar alertas do navegador?</strong>
+      <p>Receba avisos quando surgir um pedido atrasado ou uma possível duplicidade. Ao clicar no aviso, o painel volta para frente.</p>
+      <div class="notification-activation-actions">
+        <button class="notification-later" type="button">Agora não</button>
+        <button class="notification-enable" type="button">Ativar alertas</button>
+      </div>
+    </section>
+  `;
+
+  overlay.querySelector(".notification-later").addEventListener("click", () => {
+    localStorage.setItem(NOTIFICATION_PROMPT_DISMISSED_KEY, "true");
+    overlay.remove();
+  });
+  overlay.querySelector(".notification-enable").addEventListener("click", async () => {
+    await requestBrowserNotifications();
+    overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+  overlay.querySelector(".notification-enable").focus();
+}
+
 function handleLateAlerts(lateOrders) {
   const currentLateKeys = new Set(lateOrders.map(alertKeyForOrder).filter(Boolean));
 
@@ -202,11 +340,16 @@ function handleLateAlerts(lateOrders) {
     return;
   }
 
-  const hasNewLateOrder = [...currentLateKeys].some((key) => !previousLateOrderKeys.has(key));
+  const newLateOrders = lateOrders.filter((order) => !previousLateOrderKeys.has(alertKeyForOrder(order)));
   previousLateOrderKeys = currentLateKeys;
 
-  if (hasNewLateOrder) {
+  if (newLateOrders.length > 0) {
     playLateAlertSound();
+    showBrowserNotification(
+      newLateOrders.length === 1 ? "Pedido atrasado" : `${newLateOrders.length} pedidos atrasados`,
+      newLateOrders.map((order) => `#${order.number} - ${order.customer || "Cliente"}`).join(" | "),
+      `laqualite-late-${newLateOrders.map(alertKeyForOrder).join("-")}`
+    );
   }
 }
 
@@ -263,8 +406,8 @@ function handleDoubleLateAlerts(activeOrders) {
 }
 
 function statusFor(order) {
-  if (isPickupReady(order)) {
-    return { label: "Esperando retirada", className: "ready" };
+  if (isOrderReady(order)) {
+    return { label: isPickup(order) ? "Esperando retirada" : "Pronto", className: "ready" };
   }
 
   const minutes = elapsedMinutes(order);
@@ -445,6 +588,11 @@ function handleDuplicateAlerts(sourceOrders, signals) {
 
   if (newDuplicatePhones.length > 0 && !isAlertModalOpen()) {
     playDuplicateAlertSound();
+    showBrowserNotification(
+      "Possível pedido duplicado",
+      duplicatePopupMessage(newDuplicatePhones, sourceOrders).join(" | "),
+      `laqualite-duplicate-${newDuplicatePhones.join("-")}`
+    );
     showDuplicatePopup(newDuplicatePhones, signals, sourceOrders);
   }
 }
@@ -467,9 +615,11 @@ function kdsStatusFor(order) {
 function metricContextForFilter() {
   if (activeFilter === "delivery") {
     return {
-      activeFilter: isDelivery,
+      activeFilter: (order) => isDelivery(order) && !isOrderReady(order),
       dispatchedFilter: isDelivery,
+      readyActiveFilter: (order) => isDelivery(order) && isOrderReady(order),
       preparingLabel: "Entregas em preparo",
+      readyLabel: "Entregas prontas",
       dispatchedLabel: "Entregas despachadas",
       totalLabel: "Total de entregas",
     };
@@ -481,16 +631,18 @@ function metricContextForFilter() {
       dispatchedFilter: isPickup,
       readyActiveFilter: isPickupReady,
       preparingLabel: "Retiradas em preparo",
-      dispatchedLabel: "Retiradas prontas",
+      readyLabel: "Retiradas prontas",
+      dispatchedLabel: "Retiradas finalizadas",
       totalLabel: "Total de retiradas",
     };
   }
 
   return {
-    activeFilter: (order) => !isPickupReady(order),
+    activeFilter: (order) => !isOrderReady(order),
     dispatchedFilter: () => true,
-    readyActiveFilter: isPickupReady,
+    readyActiveFilter: isOrderReady,
     preparingLabel: "Pedidos em preparo",
+    readyLabel: "Pedidos prontos",
     dispatchedLabel: "Pedidos despachados",
     totalLabel: "Total de pedidos",
   };
@@ -502,13 +654,16 @@ function updateMetricsBar(activeOrders) {
   const readyActiveTotal = context.readyActiveFilter
     ? activeOrders.filter(context.readyActiveFilter).length
     : 0;
-  const dispatchedTotal = dispatchedOrders.filter(context.dispatchedFilter).length + readyActiveTotal;
+  const dispatchedTotal = dispatchedOrders.filter(context.dispatchedFilter).length;
 
   if (preparingLabel) {
     preparingLabel.textContent = context.preparingLabel;
   }
   if (dispatchedLabel) {
     dispatchedLabel.textContent = context.dispatchedLabel;
+  }
+  if (readyLabel) {
+    readyLabel.textContent = context.readyLabel;
   }
   if (grandTotalLabel) {
     grandTotalLabel.textContent = context.totalLabel;
@@ -519,8 +674,11 @@ function updateMetricsBar(activeOrders) {
   if (dispatchedCount) {
     dispatchedCount.textContent = String(dispatchedTotal);
   }
+  if (readyCount) {
+    readyCount.textContent = String(readyActiveTotal);
+  }
   if (grandTotalCount) {
-    grandTotalCount.textContent = String(preparingTotal + dispatchedTotal);
+    grandTotalCount.textContent = String(preparingTotal + readyActiveTotal + dispatchedTotal);
   }
 }
 
@@ -549,14 +707,22 @@ function renderOrders() {
   const isSettingsOpen = activeFilter === "settings";
   const isEventsOpen = activeFilter === "events";
   const isMonitorOpen = activeFilter === "monitor";
+  const isDispatchOpen = activeFilter === "dispatch";
   const isDispatchedOpen = activeFilter === "dispatched";
+  const isPreparationOpen = ["all", "preparing", "ready", "delivery", "pickup", "late"].includes(activeFilter);
   const activeOrders = [...orders].sort((a, b) => orderSortValue(a) - orderSortValue(b));
   const duplicateInfo = duplicateSignals(activeOrders);
   const deliveryOrders = activeOrders.filter(isDelivery);
   const pickupOrders = activeOrders.filter(isPickup);
   const lateOrders = activeOrders.filter(isLate);
+  const preparingOrders = activeOrders.filter((order) => !isOrderReady(order));
+  const readyOrders = activeOrders.filter(isOrderReady);
   const visibleOrders =
-    activeFilter === "late"
+    activeFilter === "preparing"
+      ? preparingOrders
+      : activeFilter === "ready"
+        ? readyOrders
+        : activeFilter === "late"
       ? lateOrders
       : activeFilter === "pickup"
         ? pickupOrders
@@ -564,7 +730,9 @@ function renderOrders() {
           ? deliveryOrders
           : activeOrders;
 
-  totalCount.textContent = String(activeOrders.length);
+  if (totalCount) {
+    totalCount.textContent = String(activeOrders.length);
+  }
   lateCount.textContent = String(lateOrders.length);
   updateMetricsBar(activeOrders);
   handleLateAlerts(lateOrders);
@@ -588,14 +756,31 @@ function renderOrders() {
   if (pickupLimitLabel) {
     pickupLimitLabel.textContent = String(pickupLateLimitMinutes);
   }
-  ordersPanel.hidden = isSettingsOpen || isEventsOpen || isMonitorOpen || isDispatchedOpen;
+  ordersPanel.hidden = isSettingsOpen || isEventsOpen || isMonitorOpen || isDispatchOpen || isDispatchedOpen;
   dispatchedPanel.hidden = !isDispatchedOpen;
+  if (dispatchPanel) {
+    dispatchPanel.hidden = !isDispatchOpen;
+  }
   settingsPanel.hidden = !isSettingsOpen;
   eventsPanel.hidden = !isEventsOpen;
   monitorPanel.hidden = !isMonitorOpen;
+  if (preparationFilters) {
+    preparationFilters.hidden = !isPreparationOpen;
+  }
+  if (orderMetricsBar) {
+    orderMetricsBar.hidden = !isPreparationOpen;
+  }
+  if (ordersSummary) {
+    ordersSummary.hidden = !isPreparationOpen;
+  }
 
   if (isDispatchedOpen) {
     renderDispatchedOrders();
+    return;
+  }
+
+  if (isDispatchOpen) {
+    renderDispatchPanel();
     return;
   }
 
@@ -617,6 +802,10 @@ function renderOrders() {
     orderList.innerHTML =
       activeFilter === "late"
         ? '<div class="empty">Nenhum pedido atrasado no momento.</div>'
+        : activeFilter === "ready"
+          ? '<div class="empty">Nenhum pedido pronto informado pelo Cardápio Web.</div>'
+          : activeFilter === "preparing"
+            ? '<div class="empty">Nenhum pedido em preparo no momento.</div>'
         : activeFilter === "pickup"
           ? '<div class="empty">Nenhum pedido de retirada no momento.</div>'
           : activeFilter === "delivery"
@@ -702,6 +891,80 @@ function renderDispatchedOrders() {
       </article>
     `)
     .join("");
+}
+
+function renderDispatchDriverOptions() {
+  if (!dispatchDriverSelect) {
+    return;
+  }
+
+  const currentValue = dispatchDriverSelect.value || localStorage.getItem("dispatchSelectedDriverId") || "";
+  dispatchDriverSelect.innerHTML = [
+    '<option value="">Selecione o motoboy</option>',
+    ...drivers.map((driver) => `<option value="${driver.id}">${driver.name}</option>`),
+  ].join("");
+
+  if (drivers.some((driver) => String(driver.id) === currentValue)) {
+    dispatchDriverSelect.value = currentValue;
+  }
+}
+
+function renderDispatchPanel() {
+  if (!dispatchPanel || !dispatchOrderList) {
+    return;
+  }
+
+  const deliveryOrders = [...orders]
+    .filter(isDelivery)
+    .sort((left, right) => orderSortValue(left) - orderSortValue(right));
+  const availableIds = new Set(deliveryOrders.map(dispatchOrderId));
+
+  for (const orderId of selectedDispatchOrderIds) {
+    if (!availableIds.has(orderId)) {
+      selectedDispatchOrderIds.delete(orderId);
+    }
+  }
+
+  if (dispatchSelectedCount) {
+    dispatchSelectedCount.textContent = String(selectedDispatchOrderIds.size);
+  }
+  if (dispatchConfirm) {
+    dispatchConfirm.disabled = dispatchInFlight || selectedDispatchOrderIds.size === 0 || !dispatchDriverSelect?.value;
+    dispatchConfirm.textContent = dispatchInFlight ? "Despachando..." : "Despachar selecionados";
+  }
+  if (dispatchSelectAll) {
+    const allSelected = deliveryOrders.length > 0 && deliveryOrders.every((order) => selectedDispatchOrderIds.has(dispatchOrderId(order)));
+    dispatchSelectAll.disabled = dispatchInFlight || deliveryOrders.length === 0;
+    dispatchSelectAll.textContent = allSelected ? "Limpar seleção" : "Selecionar todos";
+  }
+  if (dispatchFeedback) {
+    dispatchFeedback.hidden = !dispatchMessage;
+    dispatchFeedback.textContent = dispatchMessage;
+    dispatchFeedback.className = `dispatch-feedback${dispatchMessageState ? ` ${dispatchMessageState}` : ""}`;
+  }
+
+  if (deliveryOrders.length === 0) {
+    dispatchOrderList.innerHTML = '<div class="empty">Nenhuma entrega disponível para despacho.</div>';
+    return;
+  }
+
+  dispatchOrderList.innerHTML = deliveryOrders.map((order) => {
+    const orderId = dispatchOrderId(order);
+    const selected = selectedDispatchOrderIds.has(orderId);
+    const status = statusFor(order);
+
+    return `
+      <button class="dispatch-order-row priority-${status.className}${selected ? " is-selected" : ""}" type="button" data-order-id="${orderId}" aria-pressed="${selected}">
+        <span class="dispatch-checkbox" aria-hidden="true">${selected ? "✓" : ""}</span>
+        <strong class="dispatch-order-number">#${order.number}</strong>
+        <span>${order.customer}</span>
+        <span>${displayNeighborhood(order)}</span>
+        <span>${displayCity(order)}</span>
+        <strong class="dispatch-order-time">${formatTimer(order)}</strong>
+        <span class="status ${status.className}">${status.label}</span>
+      </button>
+    `;
+  }).join("");
 }
 
 function renderEvents() {
@@ -820,6 +1083,87 @@ async function loadDispatchedOrders() {
   renderOrders();
 }
 
+async function loadDrivers() {
+  try {
+    const response = await fetch("/api/drivers");
+    const data = await response.json();
+    drivers = Array.isArray(data.drivers) ? data.drivers : [];
+  } catch (error) {
+    drivers = [];
+  }
+
+  renderDispatchDriverOptions();
+  renderDispatchPanel();
+}
+
+async function dispatchSelectedOrders() {
+  if (dispatchInFlight || !dispatchDriverSelect?.value || selectedDispatchOrderIds.size === 0) {
+    return;
+  }
+
+  const driver = drivers.find((item) => String(item.id) === dispatchDriverSelect.value);
+  const selectedOrders = orders
+    .filter(isDelivery)
+    .filter((order) => selectedDispatchOrderIds.has(dispatchOrderId(order)))
+    .map((order) => ({ number: order.number, orderId: order.orderId }));
+
+  if (!driver || selectedOrders.length === 0) {
+    dispatchMessage = "Selecione um motoboy e pelo menos um pedido.";
+    dispatchMessageState = "danger";
+    renderDispatchPanel();
+    return;
+  }
+
+  const confirmed = window.confirm(`Despachar ${selectedOrders.length} pedido(s) com ${driver.name}?`);
+  if (!confirmed) {
+    return;
+  }
+
+  dispatchInFlight = true;
+  dispatchMessage = "Enviando despachos ao Cardápio Web...";
+  dispatchMessageState = "";
+  renderDispatchPanel();
+
+  try {
+    const response = await fetch("/api/dispatch-orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        driverId: driver.id,
+        driverName: driver.name,
+        orders: selectedOrders,
+      }),
+    });
+    const result = await response.json();
+
+    for (const item of result.results || []) {
+      if (item.ok) {
+        selectedDispatchOrderIds.delete(String(item.orderId || item.order || ""));
+      }
+    }
+
+    if (result.failed) {
+      const failedOrders = (result.results || []).filter((item) => !item.ok).map((item) => `#${item.order}`).join(", ");
+      dispatchMessage = `${result.succeeded || 0} despachado(s). ${result.failed} falha(s): ${failedOrders}. Consulte Eventos.`;
+      dispatchMessageState = "danger";
+    } else if (result.ok) {
+      dispatchMessage = `${result.succeeded || selectedOrders.length} pedido(s) despachado(s) com ${driver.name}.`;
+      dispatchMessageState = "ok";
+      selectedDispatchOrderIds.clear();
+    } else {
+      dispatchMessage = result.message || "Não foi possível concluir o despacho. Consulte Eventos.";
+      dispatchMessageState = "danger";
+    }
+  } catch (error) {
+    dispatchMessage = "Falha de comunicação ao despachar. Consulte Eventos e tente novamente.";
+    dispatchMessageState = "danger";
+  }
+
+  dispatchInFlight = false;
+  await Promise.all([loadOrders(), loadDispatchedOrders(), loadEvents(), loadHealth()]);
+  renderDispatchPanel();
+}
+
 async function loadHealth() {
   try {
     const response = await fetch("/api/health");
@@ -867,7 +1211,7 @@ async function clearDispatchedNow() {
     return;
   }
 
-  const confirmed = window.confirm("Limpar a lista de despachados? Pedidos ativos e KDS nao serao apagados.");
+  const confirmed = window.confirm("Limpar a lista de despachados? Os pedidos ativos não serão apagados.");
 
   if (!confirmed) {
     return;
@@ -998,6 +1342,25 @@ function setConfigMenuOpen(isOpen) {
   configToggle.setAttribute("aria-expanded", String(isOpen));
 }
 
+function updateTabStates() {
+  const preparationFilterNames = ["all", "preparing", "ready", "delivery", "pickup", "late"];
+  const isPreparationOpen = preparationFilterNames.includes(activeFilter);
+
+  tabs.forEach((item) => {
+    const isPreparationMainTab = item.id === "preparation-tab";
+    const isPreparationSubFilter = item.classList.contains("prep-filter");
+    const isActive = isPreparationMainTab
+      ? isPreparationOpen
+      : isPreparationSubFilter
+        ? item.dataset.filter === activeFilter
+        : item.dataset.filter === activeFilter;
+
+    item.classList.toggle("active", isActive);
+  });
+
+  configToggle?.classList.toggle("active", isConfigFilter(activeFilter));
+}
+
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     if (tab.id === "fullscreen-button") {
@@ -1011,10 +1374,10 @@ tabs.forEach((tab) => {
     }
 
     activeFilter = tab.dataset.filter;
+    localStorage.setItem(SAVED_PANEL_VIEW_KEY, activeFilter);
     setConfigMenuOpen(false);
 
-    tabs.forEach((item) => item.classList.toggle("active", item === tab));
-    configToggle?.classList.toggle("active", isConfigFilter(activeFilter));
+    updateTabStates();
 
     if (activeFilter === "events") {
       loadEvents();
@@ -1023,6 +1386,10 @@ tabs.forEach((tab) => {
     if (activeFilter === "monitor") {
       loadEvents();
       loadHealth();
+    }
+
+    if (activeFilter === "dispatch") {
+      loadDrivers();
     }
 
     renderOrders();
@@ -1058,6 +1425,50 @@ if (monitorClearDispatched) {
   monitorClearDispatched.addEventListener("click", clearDispatchedNow);
 }
 
+if (dispatchDriverSelect) {
+  dispatchDriverSelect.addEventListener("change", () => {
+    localStorage.setItem("dispatchSelectedDriverId", dispatchDriverSelect.value);
+    renderDispatchPanel();
+  });
+}
+
+if (dispatchSelectAll) {
+  dispatchSelectAll.addEventListener("click", () => {
+    const deliveryOrders = orders.filter(isDelivery);
+    const allSelected = deliveryOrders.length > 0 && deliveryOrders.every((order) => selectedDispatchOrderIds.has(dispatchOrderId(order)));
+    selectedDispatchOrderIds.clear();
+    if (!allSelected) {
+      deliveryOrders.forEach((order) => selectedDispatchOrderIds.add(dispatchOrderId(order)));
+    }
+    dispatchMessage = "";
+    dispatchMessageState = "";
+    renderDispatchPanel();
+  });
+}
+
+if (dispatchConfirm) {
+  dispatchConfirm.addEventListener("click", dispatchSelectedOrders);
+}
+
+if (dispatchOrderList) {
+  dispatchOrderList.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-order-id]");
+    if (!row || dispatchInFlight) {
+      return;
+    }
+
+    const orderId = String(row.dataset.orderId || "");
+    if (selectedDispatchOrderIds.has(orderId)) {
+      selectedDispatchOrderIds.delete(orderId);
+    } else {
+      selectedDispatchOrderIds.add(orderId);
+    }
+    dispatchMessage = "";
+    dispatchMessageState = "";
+    renderDispatchPanel();
+  });
+}
+
 if (footerRefresh) {
   footerRefresh.addEventListener("click", () => {
     loadOrders();
@@ -1086,6 +1497,10 @@ if (lateAlertTest) {
     syncLateAlertControl();
     playLateAlertSound();
   });
+}
+
+if (browserNotificationEnable) {
+  browserNotificationEnable.addEventListener("click", requestBrowserNotifications);
 }
 
 ["pointerdown", "keydown"].forEach((eventName) => {
@@ -1120,10 +1535,21 @@ if (pickupLimitInput) {
   });
 }
 
+updateTabStates();
+syncBrowserNotificationControl();
+showBrowserNotificationActivationPopup();
 loadOrders();
 updateFullscreenButton();
 syncLateAlertControl();
 loadDispatchedOrders();
+loadDrivers();
+if (activeFilter === "events") {
+  loadEvents();
+}
+if (activeFilter === "monitor") {
+  loadEvents();
+  loadHealth();
+}
 connectLiveUpdates();
 setInterval(loadOrders, 5000);
 setInterval(loadDispatchedOrders, 10000);

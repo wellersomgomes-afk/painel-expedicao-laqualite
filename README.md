@@ -2,6 +2,8 @@
 
 Primeira versao do painel de expedicao com recebimento de webhook.
 
+> O KDS esta temporariamente desativado. O sistema opera somente com o Painel de Expedicao.
+
 ## O que esta versao faz
 
 - Lista pedidos por ordem de chegada, com os mais antigos no topo.
@@ -10,6 +12,8 @@ Primeira versao do painel de expedicao com recebimento de webhook.
 - Permite mudar o tempo limite de saida da loja.
 - Recebe pedidos por webhook em `/api/webhook/cardapio-web`.
 - Remove pedidos da tela quando o webhook indicar despacho, entrega, conclusao ou cancelamento.
+- Permite selecionar entregas e motoboy para despachar dentro do proprio painel.
+- Registra em Eventos os sucessos e todas as falhas ocorridas no despacho.
 
 ## Como abrir localmente
 

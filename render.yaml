@@ -6,6 +6,6 @@ services:
     startCommand: npm start
     envVars:
       - key: ENABLE_KDS
-        value: "true"
+        value: "false"
       - key: SYNC_OPEN_ORDERS_INTERVAL_MS
         value: "10000"
