@@ -8,4 +8,4 @@ services:
       - key: ENABLE_KDS
         value: "false"
       - key: SYNC_OPEN_ORDERS_INTERVAL_MS
-        value: "10000"
+        value: "30000"

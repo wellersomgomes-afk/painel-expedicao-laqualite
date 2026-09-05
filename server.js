@@ -18,13 +18,12 @@ const CARDAPIO_CLIENT_ID = process.env.CARDAPIO_CLIENT_ID || "";
 const CARDAPIO_CLIENT_SECRET = process.env.CARDAPIO_CLIENT_SECRET || "";
 const CARDAPIO_API_KEY = process.env.CARDAPIO_API_KEY || "";
 const CARDAPIO_PARTNER_KEY = process.env.CARDAPIO_PARTNER_KEY || "";
-const CARDAPIO_ACCESS_TOKEN = process.env.CARDAPIO_ACCESS_TOKEN || "";
 const CARDAPIO_TOKEN_URL = process.env.CARDAPIO_TOKEN_URL || "";
 const CARDAPIO_READY_ENDPOINT_TEMPLATE =
-  process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "{partnerOrdersURL}/{orderId}/prepared";
+  process.env.CARDAPIO_READY_ENDPOINT_TEMPLATE || "{orderURL}/readyForPickup";
 const CARDAPIO_ORDERS_URL =
   process.env.CARDAPIO_ORDERS_URL ||
-  "https://integracao.cardapioweb.com/api/partner/v1/orders";
+  "https://integracao.cardapioweb.com/api/open_delivery/v1/orders";
 const CARDAPIO_PARTNER_ORDERS_URL =
   process.env.CARDAPIO_PARTNER_ORDERS_URL ||
   "https://integracao.cardapioweb.com/api/partner/v1/orders";
@@ -32,7 +31,11 @@ const CARDAPIO_EVENTS_URL =
   process.env.CARDAPIO_EVENTS_URL ||
   "https://integracao.cardapioweb.com/api/open_delivery/v1/events:polling";
 const CARDAPIO_EVENTS_ACK_URL = process.env.CARDAPIO_EVENTS_ACK_URL || "";
-const SYNC_OPEN_ORDERS_INTERVAL_MS = Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 10000;
+const SYNC_OPEN_ORDERS_INTERVAL_MS = Math.max(
+  Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 30000,
+  15000
+);
+const CARDAPIO_EVENTS_MAX_BACKOFF_MS = 5 * 60 * 1000;
 const APP_TIME_ZONE = "America/Sao_Paulo";
 const HIDE_TEST_ORDERS =
   Boolean(process.env.RENDER) || process.env.HIDE_TEST_ORDERS === "true";
@@ -53,7 +56,7 @@ const DISPATCHABLE_KDS_SECTORS = new Set(["pizzas", "esfihas", "porcoes"]);
 const PANEL_PASSWORD = process.env.PANEL_PASSWORD || "qualidade123";
 const PANEL_SESSION_SECRET =
   process.env.PANEL_SESSION_SECRET || CARDAPIO_CLIENT_SECRET || PANEL_PASSWORD;
-const PANEL_AUTH_COOKIE = "expedition_panel_auth";
+const PANEL_AUTH_COOKIE = "laqualite_auth";
 const PANEL_AUTH_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 let cachedToken = null;
@@ -61,6 +64,9 @@ let cachedTokenExpiresAt = 0;
 let partnerOrdersLastSuccessfulSyncAt = 0;
 let partnerOrdersSyncInFlight = null;
 let openOrdersSyncInFlight = null;
+let cardapioEventsRetryAt = 0;
+let cardapioEventsBackoffMs = 0;
+const recordedDuplicateGroups = new Set();
 const orderLocks = new Map();
 const storageCache = new Map();
 const storageWriteQueues = new Map();
@@ -208,8 +214,7 @@ function compactStorageData(key, data) {
     return data
       .filter((order) =>
         !demoOrderNumbers.has(String(order.number)) &&
-        order.orderId &&
-        order.orderId !== order.number &&
+        (order.orderId || order.number) &&
         !isAwaitingPaymentOrder(order) &&
         shouldShowWorkdayOrder(order)
       )
@@ -488,8 +493,7 @@ function readOrders() {
   const realOrders = orders
     .filter((order) =>
       !demoOrderNumbers.has(String(order.number)) &&
-      order.orderId &&
-      order.orderId !== order.number &&
+      (order.orderId || order.number) &&
       shouldShowWorkdayOrder(order)
     )
     .map((order) => ({
@@ -515,6 +519,7 @@ function readOrders() {
 function writeOrders(orders) {
   writeJsonFile(ORDERS_FILE, orders);
   notifyDataChanged("orders");
+  recordActiveDuplicateGroups(orders);
 }
 
 function readEvents() {
@@ -728,12 +733,6 @@ function cardapioOrderUrl(order) {
   return `${CARDAPIO_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(order.orderId || order.number)}`;
 }
 
-function cardapioPartnerOrderUrl(order) {
-  return `${CARDAPIO_PARTNER_ORDERS_URL.replace(/\/$/, "")}/${encodeURIComponent(
-    order.orderId || order.number
-  )}`;
-}
-
 async function notifyCardapioOrderReady(order) {
   if (String(order.orderId || "").startsWith("teste-")) {
     return {
@@ -744,17 +743,19 @@ async function notifyCardapioOrderReady(order) {
     };
   }
 
-  const orderURL = cardapioPartnerOrderUrl(order);
+  const orderURL = cardapioOrderUrl(order);
   const readyURL = CARDAPIO_READY_ENDPOINT_TEMPLATE
     .replace("{orderId}", encodeURIComponent(order.orderId || order.number))
-    .replace("{orderURL}", orderURL.replace(/\/$/, ""))
-    .replace("{partnerOrdersURL}", CARDAPIO_PARTNER_ORDERS_URL.replace(/\/$/, ""));
+    .replace("{orderURL}", orderURL.replace(/\/$/, ""));
+  const token = await getCardapioToken(orderURL);
   const response = await fetch(readyURL, {
     method: "POST",
     headers: {
-      ...cardapioPartnerHeaders(),
+      Authorization: `Bearer ${token}`,
       Accept: "application/json",
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -1063,8 +1064,8 @@ function removeKdsReadyOrder(order) {
 }
 
 function cardapioStatusUrl(order, statusAction) {
-  const orderURL = cardapioPartnerOrderUrl(order).replace(/\/$/, "");
-  const endpoint = statusAction === "pickup-ready" ? "prepared" : "dispatch";
+  const orderURL = cardapioOrderUrl(order).replace(/\/$/, "");
+  const endpoint = statusAction === "pickup-ready" ? "readyForPickup" : "dispatch";
 
   return `${orderURL}/${endpoint}`;
 }
@@ -1081,12 +1082,15 @@ async function notifyCardapioDispatch(order, action) {
   }
 
   const statusURL = cardapioStatusUrl(order, action);
+  const token = await getCardapioToken(statusURL);
   const response = await fetch(statusURL, {
     method: "POST",
     headers: {
-      ...cardapioPartnerHeaders(),
+      Authorization: `Bearer ${token}`,
       Accept: "application/json",
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -1281,6 +1285,60 @@ function recordSystemEvent(body, result, eventPath = "/sync-open-orders") {
   console.log("Evento do sistema:", JSON.stringify(eventRecord));
 }
 
+function normalizedPhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function duplicateIdentity(order) {
+  const phone = normalizedPhone(order?.phone);
+  if (phone.length >= 8) {
+    return { key: `phone:${phone}`, reason: "Mesmo telefone" };
+  }
+
+  const customer = normalizeText(order?.customer).replace(/\s+/g, " ").trim();
+  const address = normalizeText(order?.address).replace(/\s+/g, " ").trim();
+  if (customer.length >= 4 && address.length >= 6 && customer !== "cliente") {
+    return { key: `customer-address:${customer}|${address}`, reason: "Mesmo cliente e endereco" };
+  }
+
+  return null;
+}
+
+function recordActiveDuplicateGroups(orders) {
+  const groups = new Map();
+
+  for (const order of orders) {
+    const identity = duplicateIdentity(order);
+    if (!identity) continue;
+    const group = groups.get(identity.key) || { ...identity, orders: [] };
+    group.orders.push({ number: order.number, orderId: order.orderId, customer: order.customer });
+    groups.set(identity.key, group);
+  }
+
+  const activeSignatures = new Set();
+  for (const group of groups.values()) {
+    if (group.orders.length < 2) continue;
+    const signature = `${group.key}:${group.orders.map((order) => order.orderId || order.number).sort().join(",")}`;
+    activeSignatures.add(signature);
+    if (recordedDuplicateGroups.has(signature)) continue;
+
+    recordedDuplicateGroups.add(signature);
+    recordSystemEvent(
+      { source: "duplicate-monitor", reason: group.reason, orders: group.orders },
+      {
+        ok: false,
+        action: "possible-duplicate-detected",
+        message: `${group.orders.length} pedidos possivelmente duplicados: ${group.orders.map((order) => `#${order.number}`).join(", ")}`,
+      },
+      "/duplicate-monitor"
+    );
+  }
+
+  for (const signature of [...recordedDuplicateGroups]) {
+    if (!activeSignatures.has(signature)) recordedDuplicateGroups.delete(signature);
+  }
+}
+
 function sendJson(response, statusCode, data) {
   response.writeHead(statusCode, { "Content-Type": contentTypes[".json"] });
   response.end(JSON.stringify(data));
@@ -1351,7 +1409,7 @@ function serveLoginPage(response, { invalid = false } = {}) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Acesso ao Painel</title>
+    <title>Acesso La Qualite</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
@@ -1425,7 +1483,7 @@ function serveLoginPage(response, { invalid = false } = {}) {
   <body>
     <form id="login-form">
       <div>
-        <span>Painel de Expedição</span>
+        <span>La Qualite Delivery</span>
         <h1>Acesso ao painel</h1>
       </div>
       <label>
@@ -2313,7 +2371,6 @@ function tokenUrlsFromOrderUrl(orderURL) {
   const baseWithoutVersion = orderBaseUrl.replace(/\/v\d+$/, "");
 
   return [
-    `${origin}/api/partner/oauth/token`,
     `${origin}/oauth/token`,
     `${origin}/api/oauth/token`,
     `${orderBaseUrl}/oauth/token`,
@@ -2324,10 +2381,6 @@ function tokenUrlsFromOrderUrl(orderURL) {
 }
 
 async function getCardapioToken(orderURL) {
-  if (CARDAPIO_ACCESS_TOKEN) {
-    return CARDAPIO_ACCESS_TOKEN;
-  }
-
   if (!CARDAPIO_CLIENT_ID || !CARDAPIO_CLIENT_SECRET) {
     throw new Error("Credenciais do Cardapio Web nao configuradas no Render.");
   }
@@ -2514,13 +2567,10 @@ function cardapioPartnerApiKey() {
 }
 
 function cardapioPartnerHeaders() {
-  const headers = { Accept: "application/json" };
-
-  if (CARDAPIO_ACCESS_TOKEN) {
-    headers.Authorization = `Bearer ${CARDAPIO_ACCESS_TOKEN}`;
-  } else if (cardapioPartnerApiKey()) {
-    headers["X-API-KEY"] = cardapioPartnerApiKey();
-  }
+  const headers = {
+    Accept: "application/json",
+    "X-API-KEY": cardapioPartnerApiKey(),
+  };
 
   if (CARDAPIO_PARTNER_KEY) {
     headers["X-PARTNER-KEY"] = CARDAPIO_PARTNER_KEY;
@@ -2532,10 +2582,8 @@ function cardapioPartnerHeaders() {
 async function fetchCardapioPartnerJson(url, options = {}) {
   const apiKey = cardapioPartnerApiKey();
 
-  if (!apiKey && !CARDAPIO_ACCESS_TOKEN) {
-    throw new Error(
-      "Autenticacao Cardapio Web nao configurada. Informe CARDAPIO_ACCESS_TOKEN ou CARDAPIO_API_KEY."
-    );
+  if (!apiKey) {
+    throw new Error("CARDAPIO_API_KEY nao configurado no Render.");
   }
 
   const response = await fetch(url, {
@@ -2597,8 +2645,9 @@ function partnerOrderStatusKind(order) {
     return "awaiting-payment";
   }
 
+  // RELEASED indica que o pedido foi liberado pelo Cardapio Web; nao significa despacho.
   if (status === "released") {
-    return "dispatched";
+    return "active";
   }
 
   if ([
@@ -2955,6 +3004,16 @@ async function acknowledgeCardapioEvents(events) {
 }
 
 async function syncOpenOrderEvents() {
+  if (Date.now() < cardapioEventsRetryAt) {
+    return {
+      ok: true,
+      action: "events-backoff",
+      count: 0,
+      acknowledged: 0,
+      retryAt: new Date(cardapioEventsRetryAt).toISOString(),
+    };
+  }
+
   const token = await getCardapioToken(CARDAPIO_EVENTS_URL);
   const response = await fetch(CARDAPIO_EVENTS_URL, {
     headers: {
@@ -2972,9 +3031,21 @@ async function syncOpenOrderEvents() {
     };
   }
 
+  if (response.status === 429) {
+    const retryAfterSeconds = Number(response.headers.get("retry-after"));
+    cardapioEventsBackoffMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? retryAfterSeconds * 1000
+      : Math.min(cardapioEventsBackoffMs ? cardapioEventsBackoffMs * 2 : 30000, CARDAPIO_EVENTS_MAX_BACKOFF_MS);
+    cardapioEventsRetryAt = Date.now() + cardapioEventsBackoffMs;
+    throw new Error(`Falha ao consultar eventos do Cardapio Web: HTTP 429. Nova tentativa em ${Math.ceil(cardapioEventsBackoffMs / 1000)}s`);
+  }
+
   if (!response.ok) {
     throw new Error(`Falha ao consultar eventos do Cardapio Web: HTTP ${response.status}`);
   }
+
+  cardapioEventsBackoffMs = 0;
+  cardapioEventsRetryAt = 0;
 
   const responseText = await response.text();
   let payload = null;
@@ -4166,7 +4237,7 @@ const server = http.createServer(async (request, response) => {
 
   if (
     !["/api/orders", "/api/events", "/api/dispatched-orders", "/api/clear-dispatched-orders", "/api/create-test-orders", "/api/clear-test-orders", "/api/sync-open-orders", "/api/dispatch-orders", "/api/production-summary", "/api/kds-orders", "/api/kds-ready-orders", "/api/kds-ready", "/api/kds-item-ready", "/api/kds-dispatch", "/api/drivers", "/api/health", "/api/updates"].includes(url.pathname) &&
-    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
+    !["/", "/index.html", "/app.js", "/kds", "/producao", "/kds.html", "/kds.js", "/styles.css", "/logo-la-qualite.png", "/favicon.ico", "/api/webhook/cardapio-web"].includes(
       url.pathname
     )
   ) {
