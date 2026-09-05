@@ -33,7 +33,7 @@ const CARDAPIO_EVENTS_URL =
 const CARDAPIO_EVENTS_ACK_URL = process.env.CARDAPIO_EVENTS_ACK_URL || "";
 const SYNC_OPEN_ORDERS_INTERVAL_MS = Math.max(
   Number(process.env.SYNC_OPEN_ORDERS_INTERVAL_MS) || 30000,
-  15000
+  30000
 );
 const CARDAPIO_EVENTS_MAX_BACKOFF_MS = 5 * 60 * 1000;
 const APP_TIME_ZONE = "America/Sao_Paulo";
