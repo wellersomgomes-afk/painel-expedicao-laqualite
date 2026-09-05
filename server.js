@@ -2645,9 +2645,9 @@ function partnerOrderStatusKind(order) {
     return "awaiting-payment";
   }
 
-  // RELEASED indica que o pedido foi liberado pelo Cardapio Web; nao significa despacho.
+  // Na API Partner, RELEASED representa pedido liberado para entrega e deve sair da fila ativa.
   if (status === "released") {
-    return "active";
+    return "dispatched";
   }
 
   if ([
